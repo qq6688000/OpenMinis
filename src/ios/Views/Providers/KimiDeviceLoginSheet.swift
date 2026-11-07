@@ -190,3 +190,165 @@ struct KimiDeviceLoginSheet: View {
         topVC.present(SFSafariViewController(url: url), animated: true)
     }
 }
+
+// MARK: - WorkBuddyLoginSheet (merged; KimiDeviceLoginSheet is already in the Xcode project)
+
+/// WorkBuddy / WorkBuddy AI 官方订阅登录 sheet。
+///
+/// WorkBuddy 没有 OAuth client id：登录走官方 web 页。`WorkBuddyOAuthManager`
+/// 先 `POST /v2/plugin/auth/state` 拿登录页 URL（此 sheet 用
+/// `SFSafariViewController` 打开），随后在后台每秒轮询 `token`/`account`
+/// 直到拿到凭据。用户只需在浏览器里登录自己的 WorkBuddy 账号。
+///
+/// 结构与 `KimiDeviceLoginSheet` 一致（Safari 覆盖 sheet 时不取消轮询、
+/// 完成后关闭 Safari），只是呈现的是浏览器登录而非设备码。
+@available(iOS 16.0, *)
+struct WorkBuddyLoginSheet: View {
+    let instanceId: String
+    var initialSite: WorkBuddySite = .china
+    /// Called on dismiss with whether authentication succeeded.
+    var onFinish: (Bool) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    private enum Phase: Equatable {
+        case starting
+        case awaitingUser
+        case success
+        case failed(String)
+    }
+
+    @State private var phase: Phase = .starting
+    @State private var site: WorkBuddySite = .china
+    @State private var loginTask: Task<Void, Never>?
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 24) {
+                switch phase {
+                case .starting:
+                    ProgressView()
+                    Text(AppLocalized("Contacting WorkBuddy…"))
+                        .foregroundStyle(.secondary)
+
+                case .awaitingUser:
+                    awaitingBody
+
+                case .success:
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 44))
+                        .foregroundStyle(.green)
+                    Text(AppLocalized("Signed in to \(site.displayName)"))
+                        .font(.headline)
+
+                case let .failed(message):
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 44))
+                        .foregroundStyle(.orange)
+                    Text(message)
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal)
+                    Button(AppLocalized("Try Again")) { start() }
+                        .buttonStyle(.borderedProminent)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding()
+            .navigationTitle(AppLocalized("WorkBuddy Login"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(AppLocalized("Cancel")) { finish(false) }
+                }
+            }
+        }
+        .interactiveDismissDisabled(phase == .starting)
+        .onAppear { site = initialSite; start() }
+        // [T-workbuddy-safari-cancels-poll] Same defect as Copilot/Kimi: opening
+        // Safari covers the sheet, `onDisappear` fired, and the poll was
+        // cancelled exactly when the user left to authorize. Real exits still
+        // cancel via `finish()` / retry.
+        .onDisappear { }
+    }
+
+    @ViewBuilder
+    private var awaitingBody: some View {
+        Text(AppLocalized("1. Tap “Open sign-in page”\n2. Sign in to \(site.displayName) in the browser"))
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+
+        Button {
+            if let url = currentAuthURL { presentSafari(url) }
+        } label: {
+            Label(AppLocalized("Open sign-in page"), systemImage: "safari")
+        }
+        .buttonStyle(.borderedProminent)
+
+        HStack(spacing: 6) {
+            ProgressView().controlSize(.small)
+            Text(AppLocalized("Waiting for sign-in…"))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.top, 4)
+    }
+
+    @State private var currentAuthURL: URL?
+
+    private func start() {
+        loginTask?.cancel()
+        phase = .starting
+        currentAuthURL = nil
+        loginTask = Task { @MainActor in
+            do {
+                try await WorkBuddyOAuthManager.shared.login(instanceId: instanceId, site: site) { presentation in
+                    Task { @MainActor in
+                        currentAuthURL = presentation.authURL
+                        phase = .awaitingUser
+                        presentSafari(presentation.authURL)
+                    }
+                }
+                if Task.isCancelled { return }
+                phase = .success
+                try? await Task.sleep(nanoseconds: 900_000_000)
+                finish(true)
+            } catch is CancellationError {
+                // user cancelled — no error surface
+            } catch {
+                if Task.isCancelled { return }
+                phase = .failed(error.localizedDescription)
+            }
+        }
+    }
+
+    private func finish(_ success: Bool) {
+        loginTask?.cancel()
+        dismissPresentedSafari()
+        onFinish(success)
+        dismiss()
+    }
+
+    private func dismissPresentedSafari() {
+        guard let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene }).first,
+              let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController
+        else { return }
+        var topVC = root
+        while let presented = topVC.presentedViewController { topVC = presented }
+        if topVC is SFSafariViewController {
+            topVC.dismiss(animated: true)
+        }
+    }
+
+    private func presentSafari(_ url: URL) {
+        guard let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene }).first,
+              let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else { return }
+        var topVC = root
+        while let presented = topVC.presentedViewController { topVC = presented }
+        topVC.present(SFSafariViewController(url: url), animated: true)
+    }
+}
+

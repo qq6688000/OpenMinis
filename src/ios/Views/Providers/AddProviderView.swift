@@ -1080,6 +1080,8 @@ struct AddProviderView: View {
             // [T-copilot-provider] Same shape — the device flow lives in
             // CopilotDeviceLoginSheet so the risk notice is shown before it starts.
             case .githubCopilot: break
+            // [T-workbuddy] The browser flow runs in WorkBuddyLoginSheet.
+            case .workBuddy: break
             case .unsupported: break // free / unsupported — no OAuth
             }
             oauthAuthTime = Date()
@@ -1115,6 +1117,8 @@ struct AddProviderView: View {
             // The GitHub token is the credential worth showing; the session
             // token is derived and rotates every ~25 minutes.
             token = ProviderKeychainHelper.loadOAuthToken(instanceId: pendingInstanceId, as: CopilotTokenStorage.self)?.githubToken
+        case .workBuddy:
+            token = ProviderKeychainHelper.loadOAuthToken(instanceId: pendingInstanceId, as: WorkBuddyTokenStorage.self)?.accessToken
         case .unsupported:
             token = nil // free / unsupported — no token
         }
@@ -1195,6 +1199,7 @@ struct AddProviderView: View {
         case .xAI: return AppLocalized("Sign in with xAI")
         case .kimiCode: return AppLocalized("Sign in with Kimi Code")
         case .githubCopilot: return AppLocalized("Sign in with GitHub")
+        case .workBuddy: return AppLocalized("Sign in with WorkBuddy")
         case .unsupported: return AppLocalized("Sign In")
         }
     }
@@ -1255,6 +1260,10 @@ struct AddProviderView: View {
         // cannot use is worse than offering none: it looks like the supported
         // path and fails with no explanation.
         case .githubCopilot:
+            return [.oauth]
+        // [T-workbuddy] WorkBuddy has no API-key form — the only credential is
+        // the OAuth token from official sign-in (plus uid/domain headers).
+        case .workBuddy:
             return [.oauth]
         case .openAIResponses, .gemini:
             return [.apiKey]

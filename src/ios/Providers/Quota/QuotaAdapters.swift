@@ -75,6 +75,9 @@ enum QuotaVendorDetector {
         case .xAI: return .xAI
         case .kimiCode: return .kimiCode
         case .githubCopilot: return .githubCopilot
+        // [T-workbuddy] No vendor-specific quota interface yet; treat as unknown
+        // (passive, "not implemented") until a captured response confirms fields.
+        case .workBuddy: return .unknown
         case .unsupported: return .unknown
         }
     }

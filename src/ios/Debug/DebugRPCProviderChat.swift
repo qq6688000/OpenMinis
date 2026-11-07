@@ -43,14 +43,17 @@ enum DebugRPCProvider {
             case .kimiCode: supportedCreds = ["oauth"]
             // [T-copilot-provider] OAuth only — there is no API-key form.
             case .githubCopilot: supportedCreds = ["oauth"]
+            // [T-workbuddy] OAuth only — subscription login; no API-key form.
+            case .workBuddy: supportedCreds = ["oauth"]
             case .unsupported: supportedCreds = []
             }
             let customBaseSupported: Bool
             switch type {
             case .openAI, .openRouter, .openAIResponses, .gemini, .xAI, .kimiCode: customBaseSupported = true
             // Copilot's host is fixed; a custom base would just break the
-            // header/endpoint contract the integration depends on.
-            case .anthropic, .antigravity, .githubCopilot, .unsupported: customBaseSupported = false
+            // header/endpoint contract the integration depends on. Same for
+            // WorkBuddy — the site's own endpoint is fixed.
+            case .anthropic, .antigravity, .githubCopilot, .workBuddy, .unsupported: customBaseSupported = false
             }
             return [
                 "id": type.rawValue,

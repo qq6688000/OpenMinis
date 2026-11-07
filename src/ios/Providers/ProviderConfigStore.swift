@@ -1387,6 +1387,8 @@ final class ProviderConfigStore: ObservableObject {
                 return ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: XAITokenStorage.self).flatMap { try? JSONEncoder().encode($0) }
             case .kimiCode:
                 return ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: KimiTokenStorage.self).flatMap { try? JSONEncoder().encode($0) }
+            case .workBuddy:
+                return ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: WorkBuddyTokenStorage.self).flatMap { try? JSONEncoder().encode($0) }
             default:
                 return nil
             }
@@ -1520,6 +1522,10 @@ final class ProviderConfigStore: ObservableObject {
                 }
             case .kimiCode:
                 if let t = try? JSONDecoder().decode(KimiTokenStorage.self, from: blob) {
+                    ProviderKeychainHelper.saveOAuthToken(t, instanceId: instance.id)
+                }
+            case .workBuddy:
+                if let t = try? JSONDecoder().decode(WorkBuddyTokenStorage.self, from: blob) {
                     ProviderKeychainHelper.saveOAuthToken(t, instanceId: instance.id)
                 }
             default:
@@ -3295,6 +3301,26 @@ final class ProviderConfigStore: ObservableObject {
             // refresh right after sign-in works without any extra priming.
             let token = try await CopilotOAuthManager.shared.validSessionToken(instanceId: instance.id)
             return try await CopilotModelsAPI.fetchModels(sessionToken: token)
+        case (.workBuddy, _):
+            // [T-workbuddy] OAuth path. WorkBuddy's chat is OpenAI-compatible,
+            // so the catalog comes from /models with the account headers. The
+            // site's endpoint already carries the full path (no /v1 append).
+            let site = instance.workBuddySite ?? .china
+            let token = try await WorkBuddyOAuthManager.shared.validAccessToken(instanceId: instance.id)
+            var headers = ["X-User-Id": "", "X-Domain": site.host]
+            if let storage = ProviderKeychainHelper.loadOAuthToken(instanceId: instance.id, as: WorkBuddyTokenStorage.self) {
+                headers["X-User-Id"] = storage.uid
+                headers["X-Domain"] = storage.domain
+                if let enterprise = storage.enterpriseId, !enterprise.isEmpty {
+                    headers["X-Enterprise-Id"] = enterprise
+                    headers["X-Tenant-Id"] = enterprise
+                }
+            }
+            headers["User-Agent"] = WorkBuddyOAuthManager.userAgent
+            let models = try await OpenAIModelsAPI.fetchModels(
+                apiKey: token, baseURL: site.chatBaseURL, appendV1Suffix: false,
+                forceRefresh: forceRefresh, extraHeaders: headers)
+            return models.isEmpty ? WorkBuddyModelsAPI.allModels : models
         case (.unsupported, _):
             // Synced from a newer build — can't fetch; keep whatever's stored.
             return []
@@ -3480,6 +3506,8 @@ final class ProviderConfigStore: ObservableObject {
         case .gemini: return "https://generativelanguage.googleapis.com"
         case .openRouter: return "https://openrouter.ai/api"
         case .antigravity: return nil // No public base URL
+        // [T-workbuddy] The site's own endpoint is the default base.
+        case .workBuddy: return (instance.workBuddySite ?? .china).endpoint
         case .unsupported: return nil // synced from newer build
         }
     }

@@ -843,6 +843,10 @@ struct LLMModel: Equatable, Hashable, Identifiable, Sendable, Codable {
             supportedModalities: ProviderType.githubCopilot.defaultModality,
             supportedAuth: [.oauth]
         ),
+        "WorkBuddy": ModelCapabilities(
+            supportedModalities: ProviderType.workBuddy.defaultModality,
+            supportedAuth: [.oauth]
+        ),
     ]
 
     /// Default capabilities when the provider is unknown.

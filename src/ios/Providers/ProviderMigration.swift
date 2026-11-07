@@ -91,6 +91,9 @@ enum ProviderMigration {
             case .githubCopilot:
                 // [T-copilot-provider] Also new — never had a singleton token.
                 break
+            case .workBuddy:
+                // [T-workbuddy] New provider; no legacy singleton tokens to migrate.
+                break
             case .unsupported:
                 break
             }

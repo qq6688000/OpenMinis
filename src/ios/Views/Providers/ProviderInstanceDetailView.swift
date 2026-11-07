@@ -11,6 +11,8 @@ struct ProviderInstanceDetailView: View {
     @State private var showKimiLogin = false
     /// [T-copilot-provider] Same device-code shape as Kimi's.
     @State private var showCopilotLogin = false
+    /// [T-workbuddy] Browser sign-in sheet for WorkBuddy subscription.
+    @State private var showWorkBuddyLogin = false
     @State private var keyInputText = ""
     @State private var isFetchingModels = false
     /// [T-thinking-rules-ui-fix] Owned HERE, not inside ThinkingRulesSection: a .sheet on a
@@ -110,6 +112,16 @@ struct ProviderInstanceDetailView: View {
                     // about. Gated on `success`: a cancelled or timed-out
                     // device flow leaves no usable token to fetch with.
                     if success, instance.providerType.oauthSupportsModelDiscovery {
+                        Task { await store.refreshModels(for: instance) }
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showWorkBuddyLogin) {
+            if let instance = instance {
+                WorkBuddyLoginSheet(instanceId: instance.id, initialSite: instance.workBuddySite ?? .china) { success in
+                    oauthRefreshTrigger.toggle()
+                    if success {
                         Task { await store.refreshModels(for: instance) }
                     }
                 }
@@ -630,6 +642,8 @@ struct ProviderInstanceDetailView: View {
             showKimiLogin = true
         } else if instance.providerType == .githubCopilot {
             showCopilotLogin = true
+        } else if instance.providerType == .workBuddy {
+            showWorkBuddyLogin = true
         } else {
             Task {
                 await oauthLogin(instance)
@@ -653,6 +667,7 @@ struct ProviderInstanceDetailView: View {
         case .xAI: return "https://api.x.ai/v1"
         case .kimiCode: return "https://api.kimi.com/coding"
         case .githubCopilot: return CopilotConstants.apiBaseURL
+        case .workBuddy: return (instance.workBuddySite ?? .china).chatBaseURL
         case .unsupported: return "—"
         }
     }
@@ -1093,6 +1108,7 @@ struct ProviderInstanceDetailView: View {
         case .xAI: return XAIOAuthManager.shared.isAuthenticated(instanceId: instance.id)
         case .kimiCode: return KimiOAuthManager.shared.isAuthenticated(instanceId: instance.id)
         case .githubCopilot: return CopilotOAuthManager.shared.isAuthenticated(instanceId: instance.id)
+        case .workBuddy: return WorkBuddyOAuthManager.shared.isAuthenticated(instanceId: instance.id)
         case .unsupported: return false // synced from newer build
         }
     }
@@ -1157,6 +1173,12 @@ struct ProviderInstanceDetailView: View {
         case .githubCopilot:
             return CopilotOAuthManager.shared.isAuthenticated(instanceId: instance.id)
                 ? AppLocalized("Authenticated") : AppLocalized("Not authenticated")
+        case .workBuddy:
+            let name = WorkBuddyOAuthManager.shared.accountName(instanceId: instance.id)
+            if WorkBuddyOAuthManager.shared.isAuthenticated(instanceId: instance.id) {
+                return name.map { "\($0) · \(AppLocalized("Authenticated"))" } ?? AppLocalized("Authenticated")
+            }
+            return AppLocalized("Not authenticated")
         case .unsupported:
             return AppLocalized("Unsupported in this app version")
         }
@@ -1173,6 +1195,7 @@ struct ProviderInstanceDetailView: View {
         case .xAI: return AppLocalized("Sign in with xAI")
         case .kimiCode: return AppLocalized("Sign in with Kimi Code")
         case .githubCopilot: return AppLocalized("Sign in with GitHub")
+        case .workBuddy: return AppLocalized("Sign in with WorkBuddy")
         case .unsupported: return AppLocalized("Sign In")
         }
     }
@@ -1189,6 +1212,7 @@ struct ProviderInstanceDetailView: View {
             case .xAI: try await XAIOAuthManager.shared.login(instanceId: instance.id)
             case .kimiCode: break // device-code flow runs in KimiDeviceLoginSheet
             case .githubCopilot: break // device-code flow runs in CopilotDeviceLoginSheet
+            case .workBuddy: break // browser flow runs in WorkBuddyLoginSheet
             case .unsupported: break
             }
             // [T-provider-oauth-model-discovery] Reconcile models on a

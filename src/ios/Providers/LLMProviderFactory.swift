@@ -78,6 +78,8 @@ enum LLMProviderFactory {
             return openCode(makeKimiProvider(instance: instance, model: entry.model))
         case .githubCopilot:
             return openCode(makeCopilotProvider(instance: instance, model: entry.model))
+        case .workBuddy:
+            return openCode(makeWorkBuddyProvider(instance: instance, model: entry.model))
         case .unsupported:
             throw FactoryError.voiceOnlyProvider
         }
@@ -442,6 +444,52 @@ enum LLMProviderFactory {
             provider.appendV1Suffix = appendV1
             return provider
         }
+    }
+
+    /// WorkBuddy / WorkBuddy AI（腾讯 CodeBuddy 订阅）。
+    ///
+    /// 官方 OpenAI 兼容端点 `{endpoint}/v2/chat/completions`，账号用 access
+    /// token + 自定义头认证。站点由 `instance.workBuddySite` 决定，默认 China。
+    /// 认证头（`X-User-Id` / `X-Domain` / 企业 `X-Enterprise-Id`）从存储的
+    /// `WorkBuddyTokenStorage` 取；OAuth 分支的 token 由
+    /// `WorkBuddyOAuthManager.validAccessToken` 按需提供（含刷新）。
+    ///
+    /// 与 Kimi/xAI 一致支持手动 token（`manual-oauth-token`），但 WorkBuddy
+    /// 的手动 token 无法单独工作——它还需要 uid/domain 头，所以优先走
+    /// OAuth 存储（含头），手动 token 作为兜底（只有 Authorization，无头时
+    /// 可能被服务端拒；仍保留以不丢弃用户粘贴的 token）。
+    static func makeWorkBuddyProvider(instance: ProviderInstance, model: LLMModel) -> OpenAIProvider {
+        let site = instance.workBuddySite ?? .china
+        // 端点带完整 `/v2` 前缀，不要重复 append /v1。
+        let customBase = site.chatBaseURL
+        let provider: OpenAIProvider
+        if let manualToken = ProviderKeychainHelper.loadOAuthString(
+            instanceId: instance.id, account: "manual-oauth-token") {
+            provider = OpenAIProvider(apiKey: manualToken, model: model,
+                                      customBaseURL: customBase, appendV1Suffix: false)
+        } else {
+            let iid = instance.id
+            provider = OpenAIProvider(
+                oauthTokenProvider: { try await WorkBuddyOAuthManager.shared.validAccessToken(instanceId: iid) },
+                model: model
+            )
+            provider.customBaseURL = customBase
+            provider.appendV1Suffix = false
+        }
+        // WorkBuddy 的账号专属头（uid/domain/enterprise）。
+        if let storage = ProviderKeychainHelper.loadOAuthToken(instanceId: instance.id, as: WorkBuddyTokenStorage.self) {
+            provider.extraHeaders["X-User-Id"] = storage.uid
+            provider.extraHeaders["X-Domain"] = storage.domain
+            if let enterprise = storage.enterpriseId, !enterprise.isEmpty {
+                provider.extraHeaders["X-Enterprise-Id"] = enterprise
+                provider.extraHeaders["X-Tenant-Id"] = enterprise
+            }
+        }
+        // WorkBuddy 的请求头。
+        provider.extraHeaders["Content-Type"] = "application/json"
+        provider.extraHeaders["Accept"] = "application/json"
+        provider.extraHeaders["User-Agent"] = WorkBuddyOAuthManager.userAgent
+        return provider
     }
 
     static func makeAntigravityProvider(instance: ProviderInstance, model: LLMModel) async -> AntigravityProvider {
