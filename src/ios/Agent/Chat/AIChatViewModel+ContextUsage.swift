@@ -241,7 +241,7 @@ extension AIChatViewModel {
         // [T-copilot-provider] Copilot's /models reports `supports.thinking`
         // per model, so an explicit false there is authoritative — it belongs
         // with the strict group, not the permissive one.
-        case .anthropic, .gemini, .antigravity, .githubCopilot, .unsupported:
+        case .anthropic, .gemini, .antigravity, .githubCopilot, .workBuddy, .unsupported:
             return false
         }
     }
@@ -320,7 +320,7 @@ extension AIChatViewModel {
                 level = "budget: \(AnthropicAgentProvider.thinkingBudget(for: model, maxTokens: 64000, level: thinkLvl))"
             case .gemini:
                 level = thinkLvl.displayName
-            case .openAI, .openAIResponses, .openRouter, .xAI, .kimiCode, .githubCopilot:
+            case .openAI, .openAIResponses, .openRouter, .xAI, .kimiCode, .githubCopilot, .workBuddy:
                 level = OpenAIAgentProvider.reasoningEffort(for: model, level: thinkLvl) ?? "—"
             case .unsupported:
                 level = "—"

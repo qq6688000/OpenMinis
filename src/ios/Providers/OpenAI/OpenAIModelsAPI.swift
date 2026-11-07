@@ -15,7 +15,7 @@ enum OpenAIModelsAPI {
 
     private static let defaultBaseURL = "https://api.openai.com"
 
-    static func fetchModels(apiKey: String, baseURL: String? = nil, appendV1Suffix: Bool = true, forceRefresh: Bool = false, userAgent: String? = nil) async throws -> [LLMModel] {
+    static func fetchModels(apiKey: String, baseURL: String? = nil, appendV1Suffix: Bool = true, forceRefresh: Bool = false, userAgent: String? = nil, extraHeaders: [String: String] = [:]) async throws -> [LLMModel] {
         if !forceRefresh, let cached = OpenAIModelsCache.load(credential: apiKey) {
             logger.info("Returning \(cached.count) cached models (API key)")
             return cached
@@ -31,6 +31,9 @@ enum OpenAIModelsAPI {
         request.httpMethod = "GET"
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         if let ua = userAgent { request.setValue(ua, forHTTPHeaderField: "User-Agent") }
+        // [T-workbuddy] Account-specific headers (X-User-Id / X-Domain) for
+        // subscription endpoints that need them; empty by default for everyone else.
+        for (name, value) in extraHeaders { request.setValue(value, forHTTPHeaderField: name) }
         logger.info("Fetching OpenAI models (API key auth, custom base: \(isCustomBase), appendV1: \(appendV1Suffix))")
         let models = try await performFetch(request, filterOpenAIOnly: !isCustomBase)
         OpenAIModelsCache.save(models, credential: apiKey)

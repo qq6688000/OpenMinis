@@ -47,6 +47,10 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
     /// newer build, kept so we re-serialize it faithfully (no data loss / no
     /// rewrite to a wrong type). nil for normal instances.
     var unknownProviderTypeRaw: String?
+    /// [T-workbuddy] WorkBuddy 站点（China 腾讯 / International WorkBuddy AI）。
+    /// 仅 `.workBuddy` 实例使用；nil 时回退到 China。解码旧实例（无此字段）
+    /// 为 nil，不影响其它 provider。
+    var workBuddySite: WorkBuddySite?
 
     init(
         id: String = UUID().uuidString,
@@ -61,7 +65,8 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
         imageEndpointResolved: ImageEndpointMode? = nil,
         customUserAgent: String? = nil,
         azureMode: Bool = false,
-        unknownProviderTypeRaw: String? = nil
+        unknownProviderTypeRaw: String? = nil,
+        workBuddySite: WorkBuddySite? = nil
     ) {
         self.id = id
         self.label = label
@@ -76,13 +81,14 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
         self.customUserAgent = customUserAgent
         self.azureMode = azureMode
         self.unknownProviderTypeRaw = unknownProviderTypeRaw
+        self.workBuddySite = workBuddySite
     }
 
     // MARK: - Codable (manual, for backwards compatibility)
 
     enum CodingKeys: String, CodingKey {
         case id, label, providerType, credentialType, isEnabled, createdAt, customBaseURL, appendV1Suffix
-        case imageEndpointMode, imageEndpointResolved, customUserAgent, azureMode
+        case imageEndpointMode, imageEndpointResolved, customUserAgent, azureMode, workBuddySite
     }
 
     init(from decoder: Decoder) throws {
@@ -108,6 +114,8 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
         // [T-ios-azure-openai] Additive + optional: old data → false (off), so
         // existing OpenAI/Responses instances keep their exact prior behavior.
         azureMode = (try? c.decodeIfPresent(Bool.self, forKey: .azureMode)) ?? false
+        // [T-workbuddy] Additive + optional: old data → nil (default China).
+        workBuddySite = (try? c.decodeIfPresent(WorkBuddySite.self, forKey: .workBuddySite))
     }
 
     func encode(to encoder: Encoder) throws {
@@ -128,6 +136,9 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
         // [T-ios-azure-openai] Only encode when on, so off-instances serialize
         // byte-identically to before this field existed (no diff/churn, no LWW noise).
         if azureMode { try c.encode(azureMode, forKey: .azureMode) }
+        // [T-workbuddy] Only encode when set (site selected), to keep old
+        // instances byte-identical and avoid LWW noise for non-WorkBuddy types.
+        if let workBuddySite { try c.encode(workBuddySite, forKey: .workBuddySite) }
     }
 
     /// Returns customUserAgent if non-nil and non-empty (trimmed), otherwise nil.
@@ -149,7 +160,7 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
         // [T-copilot-provider] Copilot's User-Agent is part of the protocol —
         // the API rejects requests that do not look like the editor plugin — so
         // it must not be user-overridable the way a proxy's UA is.
-        case .gemini, .antigravity, .githubCopilot, .unsupported:
+        case .gemini, .antigravity, .githubCopilot, .workBuddy, .unsupported:
             return false
         }
     }
@@ -186,7 +197,7 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
         switch providerType {
         case .openAI, .openAIResponses, .openRouter, .xAI, .kimiCode, .githubCopilot:
             return OpenCodeChannel.looksLikeOpenCodeBaseURL(effectiveCustomBaseURL)
-        case .anthropic, .gemini, .antigravity, .unsupported:
+        case .anthropic, .gemini, .antigravity, .workBuddy, .unsupported:
             return false
         }
     }
@@ -355,6 +366,10 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
             return ProviderKeychainHelper.loadOAuthToken(
                 instanceId: id, as: CopilotTokenStorage.self, caller: "hasAnyCredential"
             )?.githubToken.isEmpty == false
+        case .workBuddy:
+            return ProviderKeychainHelper.loadOAuthToken(
+                instanceId: id, as: WorkBuddyTokenStorage.self, caller: "hasAnyCredential"
+            )?.accessToken.isEmpty == false
         case .antigravity, .openRouter, .unsupported:
             // unsupported = synced from a newer build; no usable credential here.
             // antigravity stores its token via AntigravityOAuthManager (no

@@ -645,6 +645,7 @@ struct MinisApp: App {
                         case .openAI: hasOAuthTok = ProviderKeychainHelper.loadOAuthToken(instanceId: inst.id, as: CodexTokenStorage.self) != nil
                         case .xAI: hasOAuthTok = ProviderKeychainHelper.loadOAuthToken(instanceId: inst.id, as: XAITokenStorage.self) != nil
                         case .kimiCode: hasOAuthTok = ProviderKeychainHelper.loadOAuthToken(instanceId: inst.id, as: KimiTokenStorage.self) != nil
+                        case .workBuddy: hasOAuthTok = ProviderKeychainHelper.loadOAuthToken(instanceId: inst.id, as: WorkBuddyTokenStorage.self) != nil
                         default: hasOAuthTok = false
                         }
                         let hasManual = ProviderKeychainHelper.loadOAuthString(instanceId: inst.id, account: "manual-oauth-token") != nil

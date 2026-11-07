@@ -137,6 +137,9 @@ extension AIChatViewModel {
             // warning in the one place they cannot do anything about it.
             return OpenAIAgentProvider(
                 provider: LLMProviderFactory.makeCopilotProvider(instance: instance, model: entry.model))
+        case .workBuddy:
+            return OpenAIAgentProvider(
+                provider: LLMProviderFactory.makeWorkBuddyProvider(instance: instance, model: entry.model))
         case .unsupported:
             logger.error("\(instance.providerType) has no agent provider; returning placeholder")
             return AnthropicAgentProvider(provider: AnthropicProvider(apiKey: "", model: entry.model))
