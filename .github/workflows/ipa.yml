@@ -1,0 +1,92 @@
+# Unsigned device IPA for OpenMinis (Minis), for sideloading (TrollStore / AltStore / Sideloadly).
+# The app ships a Linux sandbox, so the native dependencies (iSH, FFmpeg, LAME, rclone)
+# are built from source by the deps/ scripts BEFORE the app is compiled. First build
+# takes 30-60+ minutes; the deps are cached so later builds are fast.
+name: Unsigned IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [workbuddy-1.15]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ipa:
+    runs-on: macos-26
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # iSH and PRoot sandboxes are submodules; without them build_ish.sh fails.
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Xcode
+        run: xcodebuild -version
+
+      - name: Install build tools
+        run: |
+          brew install ninja llvm libarchive pkg-config go || true
+          pip3 install meson || true
+
+      - name: Metal Toolchain
+        # Recent Xcode ships the Metal toolchain as a separate component. FFmpeg's
+        # configure probes for it and silently drops the Metal-backed deinterlace
+        # filter when missing, so fetch it when possible, but don't fail the build.
+        run: xcodebuild -downloadComponent MetalToolchain || echo "Metal toolchain unavailable; continuing"
+
+      - name: Cache native deps
+        id: deps
+        uses: actions/cache@v5
+        with:
+          path: |
+            deps/lame-build
+            deps/frameworks
+            deps/libs
+            deps/include
+            deps/resources
+          key: openminis-deps-${{ runner.os }}-${{ hashFiles('deps/build_lame.sh','deps/build_ffmpeg.sh','deps/build_ish.sh','deps/prepare_alpine_rootfs.sh','deps/build_rclone_ios.sh') }}
+
+      - name: Build native deps
+        if: steps.deps.outputs.cache-hit != 'true'
+        run: |
+          ./deps/build_lame.sh
+          ./deps/build_ffmpeg.sh
+          ./deps/build_ish.sh
+          ./deps/prepare_alpine_rootfs.sh
+          ./deps/build_rclone_ios.sh
+
+      - name: Compile (device, unsigned)
+        run: |
+          xcodebuild -project src/ios/Minis.xcodeproj -scheme Minis \
+            -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath build/DerivedData -skipPackagePluginValidation \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= \
+            build
+
+      - name: Package IPA
+        run: |
+          set -euo pipefail
+          APP=$(find build/DerivedData/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' | head -1)
+          [ -n "$APP" ] || { echo "no .app produced"; exit 1; }
+          echo "app: $APP"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" || true
+          /usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$APP/Info.plist" || true
+          rm -rf Payload Minis-unsigned.ipa
+          mkdir Payload
+          cp -R "$APP" Payload/
+          zip -qry Minis-unsigned.ipa Payload
+          ls -lh Minis-unsigned.ipa
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: Minis-unsigned-ipa
+          path: Minis-unsigned.ipa
+          retention-days: 30
