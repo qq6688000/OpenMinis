@@ -71,6 +71,10 @@ jobs:
       - name: Build native deps
         if: steps.deps.outputs.cache-hit != 'true'
         run: |
+          # go-json-experiment/json's alias.go needs encoding/json's v2
+          # experiment symbols (json.SkipFunc / json.DiscardUnknownMembers);
+          # they exist only when GOEXPERIMENT=jsonv2 is on (Go 1.25+).
+          export GOEXPERIMENT=jsonv2
           ./deps/build_lame.sh
           ./deps/build_ffmpeg.sh
           ./deps/build_ish.sh
