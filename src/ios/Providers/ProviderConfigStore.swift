@@ -3302,25 +3302,13 @@ final class ProviderConfigStore: ObservableObject {
             let token = try await CopilotOAuthManager.shared.validSessionToken(instanceId: instance.id)
             return try await CopilotModelsAPI.fetchModels(sessionToken: token)
         case (.workBuddy, _):
-            // [T-workbuddy] OAuth path. WorkBuddy's chat is OpenAI-compatible,
-            // so the catalog comes from /models with the account headers. The
-            // site's endpoint already carries the full path (no /v1 append).
-            let site = instance.workBuddySite ?? .china
-            let token = try await WorkBuddyOAuthManager.shared.validAccessToken(instanceId: instance.id)
-            var headers = ["X-User-Id": "", "X-Domain": site.host]
-            if let storage = ProviderKeychainHelper.loadOAuthToken(instanceId: instance.id, as: WorkBuddyTokenStorage.self) {
-                headers["X-User-Id"] = storage.uid
-                headers["X-Domain"] = storage.domain
-                if let enterprise = storage.enterpriseId, !enterprise.isEmpty {
-                    headers["X-Enterprise-Id"] = enterprise
-                    headers["X-Tenant-Id"] = enterprise
-                }
-            }
-            headers["User-Agent"] = WorkBuddyOAuthManager.userAgent
-            let models = try await OpenAIModelsAPI.fetchModels(
-                apiKey: token, baseURL: site.chatBaseURL, appendV1Suffix: false,
-                forceRefresh: forceRefresh, extraHeaders: headers)
-            return models.isEmpty ? WorkBuddyModelsAPI.allModels : models
+            // [T-workbuddy] WorkBuddy 没有 /models 发现端点：服务器对
+            // /v2/models 等一律返回 404 Route Not Found（apelin/kwwk 参考实现
+            // 也是硬编码 workbuddy-models.json，从不请求服务器）。因此这里
+            // 只校验 token 有效性（失效则抛错引导重新登录），模型列表直接
+            // 用内置的 15 个，不再发起 HTTP /models 请求（否则 404 + 黄条）。
+            _ = try await WorkBuddyOAuthManager.shared.validAccessToken(instanceId: instance.id)
+            return WorkBuddyModelsAPI.allModels
         case (.unsupported, _):
             // Synced from a newer build — can't fetch; keep whatever's stored.
             return []
