@@ -72,9 +72,12 @@ jobs:
         if: steps.deps.outputs.cache-hit != 'true'
         run: |
           # go-json-experiment/json's alias.go needs encoding/json's v2
-          # experiment symbols (json.SkipFunc / json.DiscardUnknownMembers);
-          # they exist only when GOEXPERIMENT=jsonv2 is on (Go 1.25+).
+          # experiment symbols (json.SkipFunc / json.DiscardUnknownMembers),
+          # and it matches the Go 1.25 series (go.mod says `go 1.25.5`).
+          # Go 1.27.3's encoding/json reorganized these, so pin the toolchain.
           export GOEXPERIMENT=jsonv2
+          export GOTOOLCHAIN=go1.25.5
+          go version
           ./deps/build_lame.sh
           ./deps/build_ffmpeg.sh
           ./deps/build_ish.sh
