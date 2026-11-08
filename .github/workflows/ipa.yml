@@ -32,8 +32,8 @@ jobs:
 
       - name: Install build tools
         run: |
-          brew install ninja llvm libarchive pkg-config go || true
-          pip3 install meson || true
+          brew install ninja llvm libarchive pkg-config go meson
+          python3 -m pip install --user --break-system-packages meson 2>/dev/null || true
 
       - name: Metal Toolchain
         # Recent Xcode ships the Metal toolchain as a separate component. FFmpeg's
