@@ -32,7 +32,7 @@ jobs:
 
       - name: Install build tools
         run: |
-          brew install ninja llvm libarchive pkg-config go meson lld
+          brew install ninja llvm libarchive pkg-config go meson lld ldid
           python3 -m pip install --user --break-system-packages meson 2>/dev/null || true
 
       - name: Fix VDSO linker (Homebrew llvm clang)
@@ -104,6 +104,8 @@ jobs:
           rm -rf Payload Minis-unsigned.ipa
           mkdir Payload
           cp -R "$APP" Payload/
+          # TrollStore 未签名 IPA 需显式注入 entitlements（App Group 缺失会启动闪退）
+          command -v ldid >/dev/null && { echo "==> inject App Group entitlements"; ldid -S"src/ios/Minis.entitlements" "Payload/Minis.app/Minis"; }
           zip -qry Minis-unsigned.ipa Payload
           ls -lh Minis-unsigned.ipa
 
