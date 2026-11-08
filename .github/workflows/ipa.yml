@@ -32,8 +32,21 @@ jobs:
 
       - name: Install build tools
         run: |
-          brew install ninja llvm libarchive pkg-config go meson
+          brew install ninja llvm libarchive pkg-config go meson lld
           python3 -m pip install --user --break-system-packages meson 2>/dev/null || true
+
+      - name: Fix VDSO linker (Homebrew llvm clang)
+        # iSH's vdso custom_target hardcodes `-fuse-ld=lld`, but Homebrew's
+        # llvm clang on the macOS runner rejects the short name ("invalid
+        # linker name in argument '-fuse-ld=lld'"). Pointing -fuse-ld at the
+        # absolute lld path bypasses the name check (LLVM uses any path verbatim).
+        run: |
+          LLD=$(ls /opt/homebrew/opt/llvm/bin/lld /opt/homebrew/opt/lld/bin/lld /opt/homebrew/bin/lld 2>/dev/null | head -1)
+          echo "lld found at: ${LLD:-NONE}"
+          /opt/homebrew/opt/llvm/bin/clang --version | head -1 || true
+          if [ -z "$LLD" ]; then echo "!! no lld binary"; exit 1; fi
+          sed -i.bak "s|-fuse-ld=lld|-fuse-ld=${LLD}|g" deps/ish/vdso/arm64/meson.build
+          grep -n "fuse-ld" deps/ish/vdso/arm64/meson.build
 
       - name: Metal Toolchain
         # Recent Xcode ships the Metal toolchain as a separate component. FFmpeg's
