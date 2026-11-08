@@ -1216,6 +1216,7 @@ struct AddProviderView: View {
         case .xAI: return "xai-..."
         case .kimiCode: return "" // OAuth only
         case .githubCopilot: return "" // OAuth only
+        case .workBuddy: return "" // OAuth only
         case .unsupported: return ""
         }
     }
@@ -1231,6 +1232,7 @@ struct AddProviderView: View {
         case .xAI: return "xAI (Grok)"
         case .kimiCode: return "Kimi Code"
         case .githubCopilot: return "GitHub Copilot"
+        case .workBuddy: return "WorkBuddy"
         case .unsupported: return AppLocalized("Unsupported")
         }
     }
@@ -1302,6 +1304,8 @@ struct AddProviderView: View {
             // [T-copilot-provider] The risk warning belongs where the user
             // decides, not only inside the sign-in sheet.
             return AppLocalized("Unofficial integration. Using it may get your GitHub Copilot account restricted — use at your own risk.")
+        case (.workBuddy, _):
+            return AppLocalized("Sign in with your WorkBuddy / WorkBuddy AI subscription.")
         case (.unsupported, _):
             return AppLocalized("This provider isn't supported in this app version.")
         }
@@ -1337,6 +1341,9 @@ struct AddProviderView: View {
         case .githubCopilot:
             Image(systemName: "chevron.left.forwardslash.chevron.right")
                 .foregroundStyle(.primary)
+        case .workBuddy:
+            Image(systemName: "building.2.fill")
+                .foregroundStyle(.orange)
         case .unsupported:
             Image(systemName: "questionmark.circle")
                 .foregroundStyle(.gray)
@@ -1354,6 +1361,7 @@ struct AddProviderView: View {
         case .xAI: return .gray
         case .kimiCode: return .indigo
         case .githubCopilot: return .primary
+        case .workBuddy: return .orange
         case .unsupported: return .gray
         }
     }

@@ -1261,6 +1261,7 @@ struct ProviderInstanceDetailView: View {
         case .xAI: XAIOAuthManager.shared.logout(instanceId: instance.id)
         case .kimiCode: KimiOAuthManager.shared.logout(instanceId: instance.id)
         case .githubCopilot: CopilotOAuthManager.shared.logout(instanceId: instance.id)
+        case .workBuddy: WorkBuddyOAuthManager.shared.logout(instanceId: instance.id)
         case .unsupported: break
         }
     }
@@ -1286,6 +1287,8 @@ struct ProviderInstanceDetailView: View {
             token = try? await KimiOAuthManager.shared.validAccessToken(instanceId: instance.id)
         case .githubCopilot:
             token = try? await CopilotOAuthManager.shared.validSessionToken(instanceId: instance.id)
+        case .workBuddy:
+            token = try? await WorkBuddyOAuthManager.shared.validAccessToken(instanceId: instance.id)
         case .unsupported:
             token = nil
         }
@@ -1303,6 +1306,7 @@ struct ProviderInstanceDetailView: View {
         case .xAI: return "xai-..."
         case .kimiCode: return "" // OAuth only
         case .githubCopilot: return "" // OAuth only
+        case .workBuddy: return "" // OAuth only
         case .antigravity: return "API Key..."
         case .openRouter: return "sk-or-..."
         case .openAIResponses: return "sk-..."
