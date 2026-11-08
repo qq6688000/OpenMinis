@@ -41,8 +41,10 @@ jobs:
         # linker name in argument '-fuse-ld=lld'"). Pointing -fuse-ld at the
         # absolute lld path bypasses the name check (LLVM uses any path verbatim).
         run: |
-          LLD=$(ls /opt/homebrew/opt/llvm/bin/lld /opt/homebrew/opt/lld/bin/lld /opt/homebrew/bin/lld 2>/dev/null | head -1)
-          echo "lld found at: ${LLD:-NONE}"
+          # Prefer ld.lld (the Unix ELF linker); the generic `lld` driver is a
+          # multi-target dispatcher and refuses to link directly.
+          LLD=$(ls /opt/homebrew/opt/llvm/bin/ld.lld /opt/homebrew/opt/lld/bin/ld.lld /opt/homebrew/bin/ld.lld /opt/homebrew/opt/llvm/bin/lld /opt/homebrew/opt/lld/bin/lld /opt/homebrew/bin/lld 2>/dev/null | head -1)
+          echo "ld.lld found at: ${LLD:-NONE}"
           /opt/homebrew/opt/llvm/bin/clang --version | head -1 || true
           if [ -z "$LLD" ]; then echo "!! no lld binary"; exit 1; fi
           sed -i.bak "s|-fuse-ld=lld|-fuse-ld=${LLD}|g" deps/ish/vdso/arm64/meson.build
