@@ -1,0 +1,94 @@
+# Codemagic workflow: build OpenMinis unsigned device IPA (Trae provider).
+# Mirrors .github/workflows/ipa.yml (the GitHub Actions build), but runs on
+# Codemagic's mac_mini_m2 which is not subject to the public macOS runner queue.
+workflows:
+  trae-ipa:
+    instance_type: mac_mini_m2
+    max_build_duration: 5400
+    environment:
+      xcode: latest
+      cocoapods: default
+      vars:
+        GOEXPERIMENT: jsonv2
+        GOTOOLCHAIN: go1.25.5
+    scripts:
+      - name: Xcode version
+        script: xcodebuild -version
+
+      - name: Install build tools
+        script: |
+          brew install ninja llvm libarchive pkg-config go meson lld ldid || true
+          python3 -m pip install --user --break-system-packages meson 2>/dev/null || true
+
+      - name: Fix VDSO linker (Homebrew llvm clang)
+        script: |
+          LLD=$(ls /opt/homebrew/opt/llvm/bin/ld.lld /opt/homebrew/opt/lld/bin/ld.lld /opt/homebrew/bin/ld.lld /opt/homebrew/opt/llvm/bin/lld /opt/homebrew/opt/lld/bin/lld /opt/homebrew/bin/lld 2>/dev/null | head -1)
+          echo "ld.lld found at: ${LLD:-NONE}"
+          /opt/homebrew/opt/llvm/bin/clang --version | head -1 || true
+          if [ -z "$LLD" ]; then echo "!! no lld binary"; exit 1; fi
+          sed -i.bak "s|-fuse-ld=lld|-fuse-ld=${LLD}|g" deps/ish/vdso/arm64/meson.build
+          grep -n "fuse-ld" deps/ish/vdso/arm64/meson.build
+
+      - name: Metal toolchain (best effort)
+        script: xcodebuild -downloadComponent MetalToolchain || echo "Metal toolchain unavailable; continuing"
+
+      - name: Build native deps (iSH, FFmpeg, LAME, rclone, Alpine rootfs)
+        script: |
+          export GOEXPERIMENT=jsonv2
+          export GOTOOLCHAIN=go1.25.5
+          go version
+          ./deps/build_lame.sh
+          ./deps/build_ffmpeg.sh
+          ./deps/build_ish.sh
+          ./deps/prepare_alpine_rootfs.sh
+          ./deps/build_rclone_ios.sh
+
+      - name: Resolve SwiftPM deps (retry on 504)
+        script: |
+          set -euo pipefail
+          echo "==> resolve with retry"
+          for attempt in 1 2 3 4 5 6; do
+            echo "==> resolve attempt $attempt"
+            if xcodebuild -project src/ios/Minis.xcodeproj -scheme Minis \
+              -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
+              -derivedDataPath build/DerivedData -skipPackagePluginValidation \
+              -resolvePackageDependencies 2>&1 | tee /tmp/resolve_$attempt.log; then
+              echo "==> resolved OK on attempt $attempt"
+              break
+            fi
+            if grep -q "504\|badResponseStatusCode" /tmp/resolve_$attempt.log; then
+              echo "==> hit 504; sleeping 10s and retrying"
+              sleep 10
+              continue
+            fi
+            echo "==> non-504 failure; giving up"
+            exit 1
+          done
+
+      - name: Compile (device, unsigned)
+        script: |
+          xcodebuild -project src/ios/Minis.xcodeproj -scheme Minis \
+            -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath build/DerivedData -skipPackagePluginValidation \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= \
+            build
+
+      - name: Package IPA
+        script: |
+          set -euo pipefail
+          APP=$(find build/DerivedData/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' | head -1)
+          [ -n "$APP" ] || { echo "no .app produced"; exit 1; }
+          echo "app: $APP"
+          rm -rf Payload Minis-unsigned.ipa
+          mkdir Payload
+          cp -R "$APP" Payload/
+          if command -v ldid >/dev/null 2>&1; then
+            echo "==> inject App Group entitlements"
+            ldid -S"src/ios/Minis.entitlements" "Payload/Minis.app/Minis"
+          fi
+          zip -qry Minis-unsigned.ipa Payload
+          ls -lh Minis-unsigned.ipa
+    artifacts:
+      - Minis-unsigned.ipa
+      - build/DerivedData/**/*.log
