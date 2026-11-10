@@ -201,11 +201,11 @@ struct SettingsSheet: View {
                 // button lives in the composer (always on); these three switches
                 // control auto-pick fastest / auto-switch / auto-retry.
                 Section {
-                    Toggle("测速自动选最快模型", isOn: AppStorage(ChatOptimizerSettings.autoPickFastest))
+                    Toggle("测速自动选最快模型", isOn: AppStorage("chatOptimizer.autoPickFastest"))
                         .tint(.accentColor)
-                    Toggle("模型不可用自动切换", isOn: AppStorage(ChatOptimizerSettings.autoSwitchUnavailable))
+                    Toggle("模型不可用自动切换", isOn: AppStorage("chatOptimizer.autoSwitchUnavailable"))
                         .tint(.accentColor)
-                    Toggle("超时自动重试（10秒）", isOn: AppStorage(ChatOptimizerSettings.autoRetryOnTimeout))
+                    Toggle("超时自动重试（10秒）", isOn: AppStorage("chatOptimizer.autoRetryOnTimeout"))
                         .tint(.accentColor)
                 } header: {
                     Text("Chat Auto-Helpers")
