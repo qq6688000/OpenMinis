@@ -93,7 +93,7 @@ extension AIChatView {
         Button {
             Task { await runOptimizePrompt() }
         } label: {
-            Image(systemName: optimizingPrompt ? "hourglass.circle" : "text.magnify")
+            Image(systemName: optimizingPrompt ? "arrow.clockwise" : "sparkles")
                 .font(.system(size: 18))
                 .foregroundStyle(optimizingPrompt ? Color.secondary : Color.accentColor)
                 .frame(width: 34, height: 34)
