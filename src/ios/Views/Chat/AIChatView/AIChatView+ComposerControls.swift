@@ -113,10 +113,26 @@ extension AIChatView {
             AppLogger(category: "ChatOptimizer").warning("[optimize] no active entry; skip")
             return
         }
-        let rewritten = await ChatOptimizer.shared.optimize(original, using: entry)
-        // Only apply if the user hasn't typed more in the meantime.
-        if vm.inputText == original {
-            vm.inputText = rewritten
+        // Real session id: OpenCode-family channels (WorkBuddy included) reject
+        // sessionId=nil with a 400. Create the session first if needed.
+        var sid = vm.sessionId
+        if sid == nil {
+            await vm.ensureSession()
+            sid = vm.sessionId
+        }
+        do {
+            let rewritten = try await ChatOptimizer.shared.optimize(original, using: entry, sessionId: sid)
+            // Only apply if the user hasn't typed more in the meantime.
+            if vm.inputText == original {
+                vm.inputText = rewritten
+            }
+        } catch {
+            // [T-optimize-prompt] Surface the failure instead of silently keeping
+            // the original text — the user must know the rewrite didn't happen.
+            AppLogger(category: "ChatOptimizer").warning("[optimize] rewrite failed, showing toast: \(error.localizedDescription)")
+            MinisToast.show((error as? LocalizedError)?.errorDescription ?? error.localizedDescription,
+                            duration: 2.4,
+                            systemImage: "exclamationmark.triangle.fill")
         }
     }
 

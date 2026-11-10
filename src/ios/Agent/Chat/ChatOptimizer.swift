@@ -33,6 +33,17 @@ struct ModelLatencyCache: Codable {
     var entries: [String: Double] = [:]
 }
 
+/// Errors surfaced by `ChatOptimizer`.
+enum ChatOptimizerError: LocalizedError {
+    case rewriteFailed(underlying: Error)
+    var errorDescription: String? {
+        switch self {
+        case .rewriteFailed(let underlying):
+            return String(format: NSLocalizedString("提示词优化失败：%@", comment: "optimize rewrite failure"), underlying.localizedDescription)
+        }
+    }
+}
+
 @MainActor
 final class ChatOptimizer {
     static let shared = ChatOptimizer()
@@ -46,7 +57,15 @@ final class ChatOptimizer {
 
     /// Rewrite `text` into a clearer, more professional prompt using `entry`'s
     /// provider. Returns the rewritten text, or the original on any failure.
-    func optimize(_ text: String, using entry: ModelEntry) async -> String {
+    ///
+    /// - Parameter sessionId: the live conversation session id. OpenCode-family
+    ///   channels (WorkBuddy, OpenCode, OpenRouter, …) **require** a non-nil
+    ///   session id on every request — calling with `nil` is a hard 400 from the
+    ///   upstream ("missing x-opencode-session"). Always pass the real session id.
+    /// - Throws: `ChatOptimizerError.rewriteFailed` when the rewrite request
+    ///   fails, so the caller can surface a visible error to the user instead of
+    ///   silently returning the original text.
+    func optimize(_ text: String, using entry: ModelEntry, sessionId: String?) async throws -> String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return text }
 
@@ -64,7 +83,11 @@ final class ChatOptimizer {
         ]
 
         do {
-            let provider = try await LLMProviderFactory.makeProvider(for: entry, sessionId: nil)
+            // Use a per-request session id resolver so a nil/draft id (or a
+            // draft→real promotion that happens before this call) is resolved at
+            // request-build time — exactly like the live conversation path. This
+            // avoids the OpenCode 400 that the old `sessionId: nil` snapshot hit.
+            let provider = try await LLMProviderFactory.makeProvider(for: entry, resolveSessionId: { sessionId })
             let resp = try await provider.sendMessage(
                 messages: messages,
                 systemPrompt: system,
@@ -75,7 +98,7 @@ final class ChatOptimizer {
             return out.isEmpty ? trimmed : out
         } catch {
             AppLogger(category: "ChatOptimizer").warning("[optimize] rewrite failed: \(error.localizedDescription)")
-            return text
+            throw ChatOptimizerError.rewriteFailed(underlying: error)
         }
     }
 
@@ -197,5 +220,130 @@ final class ChatOptimizer {
             return sameInstance
         }
         return others.first
+    }
+
+    // MARK: - Auto-pick / auto-switch wiring
+
+    /// Switch a session's primary binding to the given entry (direct entry, no
+    /// group), preserving any existing sub-model binding. Persists via
+    /// `ProviderConfigStore.setBinding` and bumps `configRevision` so the VM's
+    /// `resolveCurrentEntry` cache re-resolves on the next access.
+    private func bindSession(_ sessionId: String, to entry: ModelEntry) {
+        let existing = store.binding(for: sessionId)
+        let binding = SessionModelBinding(
+            sessionId: sessionId,
+            primarySource: .directEntry(modelEntryId: entry.id),
+            subModelSource: existing?.subModelSource
+        )
+        store.setBinding(binding, for: sessionId)
+        // Keep the session row's displayed model id in sync.
+        Task {
+            await ChatStore.shared.updateSessionModelId(sessionId, modelId: entry.model.id)
+        }
+        NotificationCenter.default.post(
+            name: .sessionModelBindingChanged,
+            object: nil,
+            userInfo: ["sessionId": sessionId]
+        )
+    }
+
+    /// Resolve the current entry for a session, honoring the live binding.
+    private func currentEntry(for sessionId: String) -> ModelEntry? {
+        guard let binding = store.binding(for: sessionId) else { return nil }
+        let entryId: String
+        switch binding.primarySource {
+        case .directEntry(let eid, _): entryId = eid
+        case .group(_, let eid): entryId = eid
+        }
+        return store.entry(for: entryId)
+    }
+
+    /// True when the user has explicitly pinned a model for this session
+    /// (a direct-entry binding). When the binding routes through the default
+    /// group — i.e. the user never picked a specific model — auto-pick may
+    /// override it.
+    private func isManuallyPinned(for sessionId: String) -> Bool {
+        guard let binding = store.binding(for: sessionId) else { return false }
+        if case .directEntry = binding.primarySource { return true }
+        return false
+    }
+
+    /// Whether `autoPickFastest` is enabled (AppStorage-backed UserDefaults).
+    private var autoPickFastestEnabled: Bool {
+        UserDefaults.standard.bool(forKey: ChatOptimizerSettings.autoPickFastest)
+    }
+
+    /// Whether `autoSwitchUnavailable` is enabled (AppStorage-backed UserDefaults).
+    private var autoSwitchUnavailableEnabled: Bool {
+        UserDefaults.standard.bool(forKey: ChatOptimizerSettings.autoSwitchUnavailable)
+    }
+
+    /// Apply the auto-pick-fastest and auto-switch-unavailable rules before a
+    /// send. Called from the composer's `performSend` (on @MainActor) with the
+    /// session id that this turn will use. Returns true if a binding change was
+    /// applied (the resolve cache will re-resolve automatically because
+    /// `setBinding` bumps `configRevision`).
+    ///
+    /// - Parameters:
+    ///   - sessionId: the resolved session id (caller must `ensureSession` first).
+    ///   - beforeSpeedTest: synchronous hook run when the cache is empty and we
+    ///     trigger a one-shot background speed test; lets the caller decide
+    ///     whether to block the send.
+    ///   - speedTest: async speed-test function (defaults to `speedTestAll`).
+    /// - Returns: true if the active binding was changed.
+    @discardableResult
+    func applyAutoRules(
+        sessionId: String,
+        beforeSpeedTest: (() -> Void)? = nil,
+        speedTest: (@Sendable () async -> Void)? = nil
+    ) async -> Bool {
+        guard !sessionId.isEmpty else { return false }
+        var changed = false
+
+        // 1) Auto-switch unavailable: if the current entry is unusable, swap it.
+        if autoSwitchUnavailableEnabled {
+            let active = currentEntry(for: sessionId)
+            if let replacement = replacementIfUnavailable(active) {
+                bindSession(sessionId, to: replacement)
+                changed = true
+                AppLogger(category: "ChatOptimizer").info("[autoSwitch] session=\(sessionId.prefix(8)) switched \(active?.id ?? "nil") → \(replacement.id)")
+            }
+        }
+
+        // 2) Auto-pick fastest: only when the user has NOT pinned a specific model.
+        if autoPickFastestEnabled, !isManuallyPinned(for: sessionId) {
+            let cache = readLatencyCache()
+            if cache.entries.isEmpty {
+                // No latency data yet: kick off a background speed test (non-blocking)
+                // and don't change the binding this turn.
+                beforeSpeedTest?()
+                if let speedTest {
+                    Task { await speedTest() }
+                } else {
+                    Task { await self.speedTestAll() }
+                }
+            } else if let fastest = fastestEntry() {
+                let active = currentEntry(for: sessionId)
+                if active?.id != fastest.id {
+                    bindSession(sessionId, to: fastest)
+                    changed = true
+                    AppLogger(category: "ChatOptimizer").info("[autoPick] session=\(sessionId.prefix(8)) picked fastest \(fastest.id) (was \(active?.id ?? "nil"))")
+                }
+            }
+        }
+
+        return changed
+    }
+
+    /// Ensure latency data exists; if empty, run a (non-blocking) speed test.
+    /// Safe to call from app launch / picker appear. No-op if already populated.
+    func ensureLatencyDataOnce() async {
+        guard readLatencyCache().entries.isEmpty else { return }
+        await speedTestAll()
+    }
+
+    /// Public read-only view of the latency cache for UI (model picker badges).
+    var latencyCache: ModelLatencyCache {
+        readLatencyCache()
     }
 }

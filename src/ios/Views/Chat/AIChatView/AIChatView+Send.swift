@@ -145,6 +145,20 @@ extension AIChatView {
         // Intercept slash commands — execute instead of sending to LLM
         if vm.tryExecuteInputAsSlashCommand() { return }
 
+        // [T-optimize-prompt] Auto-pick-fastest / auto-switch-unavailable run
+        // BEFORE the turn is built (they may switch the session's bound model).
+        // They need a real session id (a draft has none) and do async work, so
+        // we run them in a @MainActor Task that then performs the actual send.
+        Task { @MainActor in
+            await self.ensureSessionThenApplyAutoRules()
+            self.performSendNow(afterVoice: afterVoice)
+        }
+    }
+
+    /// The synchronous half of `performSend` — runs after the auto-rules have
+    /// been applied (and a session id exists). Mirrors the original body.
+    @MainActor
+    private func performSendNow(afterVoice: Bool = false) {
         minisLogger.info("🔑DRAFT performSend vm=\(vm.vmInstanceId) vm.sessionId=\(vm.sessionId ?? "nil") draftId=\(draftId ?? "nil") inputText='\(String(vm.inputText.prefix(50)))' isProcessing=\(vm.isProcessing)")
         // Keep SwiftUI focus when a hardware keyboard is connected — dropping
         // it would force the user to tap the field again before typing the
@@ -180,6 +194,27 @@ extension AIChatView {
         if voiceInputActive {
             voiceVM.clearAndRearm()
         }
+    }
+
+    /// [T-optimize-prompt] Ensure a real session exists, then apply the
+    /// auto-pick-fastest / auto-switch-unavailable rules before the turn is
+    /// built. Only mutates the binding when a rule actually fires; the VM's
+    /// `resolveCurrentEntry` cache re-resolves because `setBinding` bumps
+    /// `configRevision`. Must run on @MainActor (everything here is).
+    @MainActor
+    private func ensureSessionThenApplyAutoRules() async {
+        // A draft has no session id yet. `vm.ensureSession()` lazily creates one
+        // (draft→real) and writes the initial binding. Without it, OpenCode-family
+        // channels would 400 on the first turn anyway, and applyAutoRules needs a
+        // session id to read/switch the binding.
+        if vm.sessionId == nil {
+            await vm.ensureSession()
+        }
+        guard let sid = vm.sessionId, !sid.isEmpty else {
+            AppLogger(category: "ChatOptimizer").warning("[autoRules] no session id after ensureSession — skipping")
+            return
+        }
+        _ = await ChatOptimizer.shared.applyAutoRules(sessionId: sid)
     }
 
     /// [T-optimize-prompt] After a send, wait `timeoutSeconds`; if the assistant

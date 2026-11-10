@@ -709,6 +709,10 @@ struct UnifiedModelPicker: View {
             loadSections()
             seedCollapse()
             SystemVoiceCatalog.startObservingVoiceChanges()
+            // [T-optimize-prompt] One-shot background speed test so latency badges
+            // populate without blocking the picker. Non-blocking; results are cached
+            // and the rows re-render via the latencyCache read.
+            Task { await ChatOptimizer.shared.ensureLatencyDataOnce() }
         }
         .onDisappear { refreshTask?.cancel() }
         .onChange(of: sections == nil) { _ in seedCollapse() }
@@ -1545,7 +1549,31 @@ struct UnifiedModelPicker: View {
             Text(traits.subtitle ?? entry.model.id)
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
+            // [T-optimize-prompt] Model latency badge from ChatOptimizer's
+            // measured latency cache. Reads the live cache each render so a
+            // background speed test updating it repaints the row.
+            if let ms = latencyBadgeText(for: entry) {
+                Text(ms)
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(Color(UIColor.tertiarySystemFill))
+                    .clipShape(RoundedRectangle(cornerRadius: 3))
+            }
         }
+    }
+
+    /// Latency badge text (e.g. "120ms") for an entry, or nil when untested.
+    /// Reads the latency cache directly from UserDefaults (where ChatOptimizer
+    /// persists it) so this non-isolated view helper stays off the MainActor.
+    private func latencyBadgeText(for entry: ModelEntry) -> String? {
+        let key = "chatOptimizer.latencyCache"
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let cache = try? JSONDecoder().decode(ModelLatencyCache.self, from: data),
+              let seconds = cache.entries[entry.id] else { return nil }
+        let ms = Int((seconds * 1000).rounded())
+        return "\(ms)ms"
     }
 
     /// Modality tags and the "unavailable" tag, as HStack children.
