@@ -187,7 +187,7 @@ extension AIChatView {
     @MainActor
     private func scheduleAutoRetryIfStalled() {
         let timeout = ChatOptimizerSettings.timeoutSeconds
-        Task { [weak vm, weak self] in
+        Task { [weak vm] in
             guard let vm = vm else { return }
             try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
             guard !Task.isCancelled else { return }
