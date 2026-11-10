@@ -102,6 +102,9 @@ struct ModelPickerConfig {
 
     var currentEntryId: (@MainActor () -> String?)?
     var currentGroupId: (@MainActor () -> String?)?
+    /// Real session id, used for background latency speed-tests (OpenCode models
+    /// need a session or the request fails). Passed through from the owning view.
+    var currentSessionId: (@MainActor () -> String?)?
 
     var onSelect: (@MainActor (ModelEntry) -> Void)?
     var onSelectGroup: (@MainActor (ModelGroup) -> Void)?
@@ -284,6 +287,9 @@ struct UnifiedModelPicker: View {
     /// [T-quota-badge-ui] The provider whose quota detail sheet is open from its
     /// header pill. Hosted here like `editingProvider`, not on the header.
     @State private var quotaDetailProvider: ProviderEditTarget?
+    /// [T-optimize-prompt] Bumped when a background speed test finishes so the
+    /// rows repaint their latency badges (UserDefaults reads are synchronous).
+    @State private var latencyTick: Int = 0
 
     /// [T-picker-provider-edit] Identifiable wrapper so `.sheet(item:)` can drive
     /// the provider detail page.
@@ -711,8 +717,12 @@ struct UnifiedModelPicker: View {
             SystemVoiceCatalog.startObservingVoiceChanges()
             // [T-optimize-prompt] One-shot background speed test so latency badges
             // populate without blocking the picker. Non-blocking; results are cached
-            // and the rows re-render via the latencyCache read.
-            Task { await ChatOptimizer.shared.ensureLatencyDataOnce() }
+            // and the rows re-render via the latencyUpdated notification.
+            let sid = await config.currentSessionId?()
+            Task { await ChatOptimizer.shared.ensureLatencyDataOnce(sessionId: sid) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: ChatOptimizer.latencyUpdatedNotification)) { _ in
+            latencyTick &+= 1
         }
         .onDisappear { refreshTask?.cancel() }
         .onChange(of: sections == nil) { _ in seedCollapse() }
@@ -1513,6 +1523,23 @@ struct UnifiedModelPicker: View {
                 // column takes the free width instead of a Spacer.
                 .frame(maxWidth: .infinity, alignment: .leading)
 
+                // [T-optimize-prompt] Availability wifi icon + latency badge on the
+                // trailing edge. Green = reachable; grey = unavailable. Latency is
+                // measured in the background and refreshes via latencyTick.
+                Image(systemName: "wifi")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(entry.isUnavailableFromProvider ? Color(UIColor.tertiaryLabel) : Color.green)
+                    .frame(width: 18)
+                if let ms = latencyBadgeText(for: entry) {
+                    Text(ms)
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(Color(UIColor.tertiarySystemFill))
+                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                }
+
                 quickTestButton(entry)
         }
         .opacity(disabled ? 0.6 : 1)
@@ -1549,18 +1576,6 @@ struct UnifiedModelPicker: View {
             Text(traits.subtitle ?? entry.model.id)
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
-            // [T-optimize-prompt] Model latency badge from ChatOptimizer's
-            // measured latency cache. Reads the live cache each render so a
-            // background speed test updating it repaints the row.
-            if let ms = latencyBadgeText(for: entry) {
-                Text(ms)
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 1)
-                    .background(Color(UIColor.tertiarySystemFill))
-                    .clipShape(RoundedRectangle(cornerRadius: 3))
-            }
         }
     }
 

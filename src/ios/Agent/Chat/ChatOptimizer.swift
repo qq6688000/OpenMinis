@@ -133,13 +133,15 @@ final class ChatOptimizer {
 
     /// Measure first-token latency for one entry using a tiny prompt.
     /// Returns seconds, or nil on failure.
-    func measureLatency(entry: ModelEntry) async -> Double? {
+    /// `sessionId` must be a real session for OpenCode-routed models; pass nil
+    /// only for providers that don't need one (most will fail without it).
+    func measureLatency(entry: ModelEntry, sessionId: String?) async -> Double? {
         let messages: [LLMMessage] = [
             LLMMessage(role: .user, content: "hi")
         ]
         let start = Date()
         do {
-            let provider = try await LLMProviderFactory.makeProvider(for: entry, sessionId: nil)
+            let provider = try await LLMProviderFactory.makeProvider(for: entry, sessionId: sessionId)
             // Use the streaming path so we can capture time-to-first-token.
             let stream = try await provider.streamMessage(
                 messages: messages,
@@ -162,7 +164,7 @@ final class ChatOptimizer {
 
     /// Speed-test every available entry (respecting an overall budget), update
     /// the cache with the best latency seen per entry.
-    func speedTestAll(concurrency: Int = 4, perEntryTimeout: TimeInterval = 20) async {
+    func speedTestAll(sessionId: String?, concurrency: Int = 4, perEntryTimeout: TimeInterval = 20) async {
         let entries = availableEntries()
         guard !entries.isEmpty else { return }
         let cache = readLatencyCache()
@@ -178,7 +180,7 @@ final class ChatOptimizer {
                 while idx < entries.count, inFlight < concurrency {
                     let e = entries[idx]; idx += 1; inFlight += 1
                     group.addTask {
-                        let lat = await self.measureLatency(entry: e)
+                        let lat = await self.measureLatency(entry: e, sessionId: sessionId)
                         return (e.id, lat)
                     }
                 }
@@ -191,7 +193,12 @@ final class ChatOptimizer {
             }
         }
         writeLatencyCache(updated)
+        // Notify UI so the model picker badges repaint with fresh latencies.
+        NotificationCenter.default.post(name: ChatOptimizer.latencyUpdatedNotification, object: nil)
     }
+
+    /// Posted after a background speed test finishes so list rows can refresh.
+    static let latencyUpdatedNotification = Notification.Name("chatOptimizer.latencyUpdated")
 
     /// The fastest available entry per the latency cache, or nil if untested.
     func fastestEntry() -> ModelEntry? {
@@ -337,9 +344,10 @@ final class ChatOptimizer {
 
     /// Ensure latency data exists; if empty, run a (non-blocking) speed test.
     /// Safe to call from app launch / picker appear. No-op if already populated.
-    func ensureLatencyDataOnce() async {
+    /// `sessionId` is a real session used so OpenCode-routed models can be tested.
+    func ensureLatencyDataOnce(sessionId: String?) async {
         guard readLatencyCache().entries.isEmpty else { return }
-        await speedTestAll()
+        await speedTestAll(sessionId: sessionId)
     }
 
     /// Public read-only view of the latency cache for UI (model picker badges).

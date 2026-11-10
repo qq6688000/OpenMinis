@@ -562,7 +562,7 @@ struct MinisApp: App {
                 // auto-pick-fastest has data. Non-blocking: it runs in its own
                 // Task and writes the cache; if it fails (offline) it simply
                 // leaves the cache empty and the picker shows no badge.
-                Task { await ChatOptimizer.shared.ensureLatencyDataOnce() }
+                Task { await ChatOptimizer.shared.ensureLatencyDataOnce(sessionId: nil) }
 
                 _ = SessionBadgeStore.shared
                 // [T-ios-session-paused-badge-hardkill] Reconcile .paused badges
