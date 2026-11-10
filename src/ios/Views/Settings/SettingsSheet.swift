@@ -197,6 +197,28 @@ struct SettingsSheet: View {
                     }
                 }
 
+                // [T-optimize-prompt] Chat auto-helpers: the prompt-rewrite
+                // button lives in the composer (always on); these three switches
+                // control auto-pick fastest / auto-switch / auto-retry.
+                Section {
+                    Toggle("测速自动选最快模型", isOn: AppStorage(
+                        ChatOptimizerSettings.autoPickFastest,
+                        store: .standard))
+                        .tint(.accentColor)
+                    Toggle("模型不可用自动切换", isOn: AppStorage(
+                        ChatOptimizerSettings.autoSwitchUnavailable,
+                        store: .standard))
+                        .tint(.accentColor)
+                    Toggle("超时自动重试（10秒）", isOn: AppStorage(
+                        ChatOptimizerSettings.autoRetryOnTimeout,
+                        store: .standard))
+                        .tint(.accentColor)
+                } header: {
+                    Text("Chat Auto-Helpers")
+                } footer: {
+                    Text("「优化词条」按钮常驻在输入框旁，可将当前文字改写为更清晰的提示词。")
+                }
+
                 Section("Storage") {
                     NavigationLink {
                         StorageManagementView()

@@ -171,10 +171,32 @@ extension AIChatView {
         // → "send() GUARD FAILED" and nothing was sent. send() consumes and clears
         // inputText itself; we re-arm voice listening only AFTER it has run.
         vm.send()
+        // [T-optimize-prompt] Auto-retry if no first token arrives within 10s.
+        if autoRetryOnTimeout {
+            scheduleAutoRetryIfStalled()
+        }
         // [inline-voice] Stay in voice mode after sending — clear the recognized
         // text and re-arm listening for the next utterance (close with ✕).
         if voiceInputActive {
             voiceVM.clearAndRearm()
+        }
+    }
+
+    /// [T-optimize-prompt] After a send, wait `timeoutSeconds`; if the assistant
+    /// has produced no text and the turn is still processing, fire one retry.
+    @MainActor
+    private func scheduleAutoRetryIfStalled() {
+        let timeout = ChatOptimizerSettings.timeoutSeconds
+        Task { [weak vm, weak self] in
+            guard let vm = vm else { return }
+            try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            // Still processing and no text yet → treat as stalled.
+            let hasText = vm.messages.last?.role == .assistant &&
+                (vm.messages.last?.blocks.contains { $0.kind == .text && !$0.content.isEmpty } ?? false)
+            guard vm.isProcessing, !hasText else { return }
+            AppLogger(category: "ChatOptimizer").info("[autoRetry] no first token in \(Int(timeout))s — retrying")
+            vm.retry()
         }
     }
 }

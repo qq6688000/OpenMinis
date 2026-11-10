@@ -414,6 +414,10 @@ struct AIChatView: View {
     /// [T-multi-select-share] The open share picker (long-press "Share…" or "…" → Share…).
     @State var shareRequest: ChatShareRequest?
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
+    /// [T-optimize-prompt] Whether the "优化词条" rewrite is in flight.
+    @State var optimizingPrompt: Bool = false
+    /// [T-optimize-prompt] Auto-retry on 10s no-first-token (read in Send.swift).
+    @AppStorage(ChatOptimizerSettings.autoRetryOnTimeout) var autoRetryOnTimeout: Bool = false
     @State var attachmentGridHeight: CGFloat = 0
     @State var transcriptHeight: CGFloat = 0
     /// Tracks how much of recognizedText has already been appended to inputText.

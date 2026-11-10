@@ -68,6 +68,9 @@ extension AIChatView {
             attachmentMenuButton
             slashMenuButton
             if vm.editingMessageIndex != nil { editExitButton }
+            // [T-optimize-prompt] "优化词条" button: rewrites the composer text
+            // into a clearer prompt using the current model before sending.
+            optimizePromptButton
             Spacer()
             // Mutually exclusive with editExitButton: while editing a past
             // message the exit capsule owns this row — showing both capsules
@@ -80,6 +83,41 @@ extension AIChatView {
             sendButton
         }
         return AnyView(row)
+    }
+
+    /// [T-optimize-prompt] Rewrites the current composer text into a clearer,
+    /// more professional prompt via the active model, then puts the result back
+    /// into the composer. Shows a spinner while rewriting.
+    @ViewBuilder
+    private var optimizePromptButton: some View {
+        Button {
+            Task { await runOptimizePrompt() }
+        } label: {
+            Image(systemName: optimizingPrompt ? "hourglass.circle" : "text.magnify")
+                .font(.system(size: 18))
+                .foregroundStyle(optimizingPrompt ? Color.secondary : Color.accentColor)
+                .frame(width: 34, height: 34)
+        }
+        .disabled(optimizingPrompt || vm.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        .accessibilityLabel("优化词条")
+    }
+
+    @MainActor
+    private func runOptimizePrompt() async {
+        let original = vm.inputText
+        guard !original.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        optimizingPrompt = true
+        defer { optimizingPrompt = false }
+        // Resolve the active entry; fall back to the session's current entry.
+        guard let entry = vm.resolveCurrentEntry() else {
+            AppLogger(category: "ChatOptimizer").warning("[optimize] no active entry; skip")
+            return
+        }
+        let rewritten = await ChatOptimizer.shared.optimize(original, using: entry)
+        // Only apply if the user hasn't typed more in the meantime.
+        if vm.inputText == original {
+            vm.inputText = rewritten
+        }
     }
 
     /// [T-ios-de-voice-toolbar] Fixed controls in `inputBottomRow`: two 34pt
