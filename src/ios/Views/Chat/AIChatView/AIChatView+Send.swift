@@ -189,6 +189,12 @@ extension AIChatView {
         if autoRetryOnTimeout {
             scheduleAutoRetryIfStalled()
         }
+        // [T-auto-switch-on-error] Immediately watch for a send error (404 model
+        // missing, rate limit, etc.) and switch to another model — independent of
+        // the 10s stall timer and its toggle.
+        if ChatOptimizer.shared.autoSwitchUnavailableEnabled {
+            watchForSendErrorAndSwitch()
+        }
         // [inline-voice] Stay in voice mode after sending — clear the recognized
         // text and re-arm listening for the next utterance (close with ✕).
         if voiceInputActive {
@@ -258,5 +264,36 @@ extension AIChatView {
             .joined(separator: " ")
         let markers = ["Provider error", "[404]", "模型不存在", "未启用", "not found", "not enabled", "does not exist", "model is not"]
         return markers.contains { joined.contains($0) }
+    }
+
+    /// [T-auto-switch-on-error] Poll `vm.errorMessage` right after a send; the
+    /// first time it becomes non-nil, switch the session to another available
+    /// model and retry once. Stops after one switch so it cannot loop forever.
+    @MainActor
+    private func watchForSendErrorAndSwitch() {
+        Task { [weak vm] in
+            guard let vm = vm else { return }
+            var switched = false
+            // Watch for up to ~30s of the turn, or until an error shows up.
+            for _ in 0..<120 {
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                if Task.isCancelled { return }
+                guard let err = vm.errorMessage, !err.isEmpty else {
+                    // No error yet; stop watching once the turn finished cleanly.
+                    if !vm.isProcessing && vm.errorMessage == nil { return }
+                    continue
+                }
+                guard !switched else { return }
+                guard ChatOptimizer.shared.autoSwitchUnavailableEnabled else { return }
+                guard let sid = vm.sessionId, !sid.isEmpty else { return }
+                AppLogger(category: "ChatOptimizer").warning("[autoSwitch] send error detected: \(err.prefix(120)) — switching model")
+                if ChatOptimizer.shared.switchToNextAvailable(sessionId: sid) {
+                    switched = true
+                    vm.errorMessage = nil
+                    vm.retry()
+                }
+                return
+            }
+        }
     }
 }
