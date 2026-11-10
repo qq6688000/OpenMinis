@@ -45,6 +45,10 @@ struct SettingsSheet: View {
     @ObservedObject private var deepLink = DeepLinkCoordinator.shared
     @State private var navPath = NavigationPath()
     @State private var showFeedbackDialog = false
+    // [T-optimize-prompt] Chat auto-helper switches.
+    @AppStorage("chatOptimizer.autoPickFastest") private var autoPickFastest = false
+    @AppStorage("chatOptimizer.autoSwitchUnavailable") private var autoSwitchUnavailable = false
+    @AppStorage("chatOptimizer.autoRetryOnTimeout") private var autoRetryOnTimeout = false
 
     var body: some View {
         NavigationStack(path: $navPath) {
@@ -201,11 +205,11 @@ struct SettingsSheet: View {
                 // button lives in the composer (always on); these three switches
                 // control auto-pick fastest / auto-switch / auto-retry.
                 Section {
-                    Toggle("测速自动选最快模型", isOn: AppStorage("chatOptimizer.autoPickFastest"))
+                    Toggle("测速自动选最快模型", isOn: $autoPickFastest)
                         .tint(.accentColor)
-                    Toggle("模型不可用自动切换", isOn: AppStorage("chatOptimizer.autoSwitchUnavailable"))
+                    Toggle("模型不可用自动切换", isOn: $autoSwitchUnavailable)
                         .tint(.accentColor)
-                    Toggle("超时自动重试（10秒）", isOn: AppStorage("chatOptimizer.autoRetryOnTimeout"))
+                    Toggle("超时自动重试（10秒）", isOn: $autoRetryOnTimeout)
                         .tint(.accentColor)
                 } header: {
                     Text("Chat Auto-Helpers")
