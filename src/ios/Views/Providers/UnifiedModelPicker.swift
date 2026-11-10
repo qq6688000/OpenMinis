@@ -718,7 +718,7 @@ struct UnifiedModelPicker: View {
             // [T-optimize-prompt] One-shot background speed test so latency badges
             // populate without blocking the picker. Non-blocking; results are cached
             // and the rows re-render via the latencyUpdated notification.
-            let sid = await config.currentSessionId?()
+            let sid = config.currentSessionId?()
             Task { await ChatOptimizer.shared.ensureLatencyDataOnce(sessionId: sid) }
         }
         .onReceive(NotificationCenter.default.publisher(for: ChatOptimizer.latencyUpdatedNotification)) { _ in

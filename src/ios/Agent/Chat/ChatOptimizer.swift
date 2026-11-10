@@ -327,7 +327,7 @@ final class ChatOptimizer {
                 if let speedTest {
                     Task { await speedTest() }
                 } else {
-                    Task { await self.speedTestAll() }
+                    Task { await self.speedTestAll(sessionId: sessionId) }
                 }
             } else if let fastest = fastestEntry() {
                 let active = currentEntry(for: sessionId)
