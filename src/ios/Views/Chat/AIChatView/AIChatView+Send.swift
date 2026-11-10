@@ -217,8 +217,9 @@ extension AIChatView {
         _ = await ChatOptimizer.shared.applyAutoRules(sessionId: sid)
     }
 
-    /// [T-optimize-prompt] After a send, wait `timeoutSeconds`; if the assistant
-    /// has produced no text and the turn is still processing, fire one retry.
+    /// [T-optimize-prompt] After a send, wait `timeoutSeconds`; then either retry
+    /// (stalled) or, if the turn ended in an error, auto-switch to another model
+    /// and retry (when `autoSwitchUnavailable` is on).
     @MainActor
     private func scheduleAutoRetryIfStalled() {
         let timeout = ChatOptimizerSettings.timeoutSeconds
@@ -226,12 +227,36 @@ extension AIChatView {
             guard let vm = vm else { return }
             try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
             guard !Task.isCancelled else { return }
-            // Still processing and no text yet → treat as stalled.
-            let hasText = vm.messages.last?.role == .assistant &&
-                (vm.messages.last?.blocks.contains { $0.kind == .text && !$0.content.isEmpty } ?? false)
-            guard vm.isProcessing, !hasText else { return }
-            AppLogger(category: "ChatOptimizer").info("[autoRetry] no first token in \(Int(timeout))s — retrying")
-            vm.retry()
+            // Has the assistant produced a real (non-error) reply?
+            let last = vm.messages.last
+            let hasText = last?.role == .assistant &&
+                (last?.blocks.contains { $0.kind == .text && !$0.content.isEmpty } ?? false)
+            let isError = (last?.role == .assistant) && Self.looksLikeError(last)
+            // Stalled (still processing, no text) → plain retry.
+            if vm.isProcessing, !hasText {
+                AppLogger(category: "ChatOptimizer").info("[autoRetry] no first token in \(Int(timeout))s — retrying")
+                vm.retry()
+                return
+            }
+            // Turn ended in an error → if auto-switch is on, swap model and retry.
+            if isError, ChatOptimizer.shared.autoSwitchUnavailableEnabled,
+               let sid = vm.sessionId, !sid.isEmpty {
+                if ChatOptimizer.shared.switchToNextAvailable(sessionId: sid) {
+                    AppLogger(category: "ChatOptimizer").info("[autoSwitch] on failure — switched and retrying")
+                    vm.retry()
+                    return
+                }
+            }
         }
+    }
+
+    /// Heuristic: does this assistant message look like an error (e.g. backend
+    /// 404 "model not found") rather than a real reply?
+    private static func looksLikeError(_ message: ChatMessage?) -> Bool {
+        guard let message = message else { return false }
+        let joined = message.blocks.compactMap { $0.kind == .text ? $0.content : nil }
+            .joined(separator: " ")
+        let markers = ["Provider error", "[404]", "模型不存在", "未启用", "not found", "not enabled", "does not exist", "model is not"]
+        return markers.contains { joined.contains($0) }
     }
 }

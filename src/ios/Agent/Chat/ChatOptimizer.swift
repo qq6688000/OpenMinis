@@ -216,13 +216,18 @@ final class ChatOptimizer {
     /// return a replacement entry. Returns nil when no switch is needed.
     func replacementIfUnavailable(_ active: ModelEntry?) -> ModelEntry? {
         guard let active = active else { return nil }
-        // Still good?
+        // Still good? (provider-listed, enabled, has creds, and NOT speed-tested as
+        // failing). If it failed a background speed test we treat it as unusable.
+        let testedUnavailable = readLatencyCache().unavailable.contains(active.id)
         if let inst = store.instance(for: active.providerInstanceId),
-           inst.isEnabled, inst.hasAnyCredential, !active.isHidden, !active.isUnavailableFromProvider {
+           inst.isEnabled, inst.hasAnyCredential, !active.isHidden,
+           !active.isUnavailableFromProvider, !testedUnavailable {
             return nil
         }
-        // Find another available entry (prefer same instance, then any).
-        let others = availableEntries().filter { $0.id != active.id }
+        // Find another available entry (prefer same instance, then any), and skip
+        // entries we already know failed a speed test.
+        let bad = readLatencyCache().unavailable
+        let others = availableEntries().filter { $0.id != active.id && !bad.contains($0.id) }
         if let sameInstance = others.first(where: { $0.providerInstanceId == active.providerInstanceId }) {
             return sameInstance
         }
@@ -281,7 +286,7 @@ final class ChatOptimizer {
     }
 
     /// Whether `autoSwitchUnavailable` is enabled (AppStorage-backed UserDefaults).
-    private var autoSwitchUnavailableEnabled: Bool {
+    var autoSwitchUnavailableEnabled: Bool {
         UserDefaults.standard.bool(forKey: ChatOptimizerSettings.autoSwitchUnavailable)
     }
 
@@ -340,6 +345,25 @@ final class ChatOptimizer {
         }
 
         return changed
+    }
+
+    /// Force-switch the session to another usable model after a send failure
+    /// (e.g. backend 404 "model not found"). Unlike `replacementIfUnavailable`,
+    /// this does NOT require the failed model to already be flagged unavailable —
+    /// it simply moves to the next available entry so the turn can be retried.
+    /// Returns true if a switch happened.
+    @MainActor
+    func switchToNextAvailable(sessionId: String) -> Bool {
+        let active = currentEntry(for: sessionId)
+        let bad = readLatencyCache().unavailable
+        let others = availableEntries().filter {
+            $0.id != active?.id && !bad.contains($0.id) &&
+            !$0.isUnavailableFromProvider && !$0.isHidden
+        }
+        guard let replacement = others.first else { return false }
+        bindSession(sessionId, to: replacement)
+        AppLogger(category: "ChatOptimizer").info("[autoSwitch] on-failure switched \(active?.id ?? "nil") → \(replacement.id)")
+        return true
     }
 
     /// Ensure latency data exists; if empty, run a (non-blocking) speed test.
