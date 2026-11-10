@@ -31,6 +31,8 @@ enum ChatOptimizerSettings {
 
 struct ModelLatencyCache: Codable {
     var entries: [String: Double] = [:]
+    /// Entry ids whose speed test failed (treated as unusable for auto-switch).
+    var unavailable: [String] = []
 }
 
 /// Errors surfaced by `ChatOptimizer`.
@@ -189,6 +191,7 @@ final class ChatOptimizer {
             for await (id, lat) in group {
                 inFlight -= 1
                 if let lat = lat { updated.entries[id] = lat }
+                else { if !updated.unavailable.contains(id) { updated.unavailable.append(id) } }
                 pump()
             }
         }
