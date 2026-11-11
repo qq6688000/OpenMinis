@@ -495,6 +495,7 @@ enum TraeOAuthClient {
                 request.setValue("application/json", forHTTPHeaderField: "Accept")
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 request.setValue("", forHTTPHeaderField: "x-cloudide-token")
+                request.timeoutInterval = 15
                 request.httpBody = payload
                 let (answer, response) = try await URLSession.shared.data(for: request)
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0
