@@ -277,7 +277,6 @@ extension AIChatView {
     /// match all three sources: vm.errorMessage, the row's `error` field, and
     /// the row's block text via `looksLikeError`. On a hit, switch model + retry
     /// once (no loop). Independent of the 10s stall timer and its toggle.
-    @MainActor
     private func watchForSendErrorAndSwitch() {
         watchForErrorAndSwitch(useRowText: false)
     }
@@ -325,7 +324,7 @@ extension AIChatView {
     /// field, and (when useRowText) the row's block text via `looksLikeError`.
     private func currentErrorText(vm: AIChatViewModel, useRowText: Bool) -> String? {
         if let e = vm.errorMessage, !e.isEmpty { return e }
-        if let e = vm.messages.last?.error, !(e?.isEmpty ?? true) { return e }
+        if let e = vm.messages.last?.error, !e.isEmpty { return e }
         if useRowText, let last = vm.messages.last, last.role == .assistant, Self.looksLikeError(last) {
             return "assistant row error"
         }
