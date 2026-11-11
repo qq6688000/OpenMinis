@@ -3321,6 +3321,14 @@ final class ProviderConfigStore: ObservableObject {
             // 用内置的 15 个，不再发起 HTTP /models 请求（否则 404 + 黄条）。
             _ = try await WorkBuddyOAuthManager.shared.validAccessToken(instanceId: instance.id)
             return WorkBuddyModelsAPI.allModels
+        case (.trae, _), (.traeIntl, _):
+            let token = try await TraeOAuthManager.shared.validAccessToken(instanceId: instance.id)
+            let site = instance.traeSite ?? .china
+            return TraeModelsAPI.fetchModels(accessToken: token, site: site)
+        case (.raccoon, _):
+            let token = try await RaccoonOAuthManager.shared.validAccessToken(instanceId: instance.id)
+            let site = instance.raccoonSite ?? .work
+            return RaccoonModelsAPI.fetchModels(accessToken: token, orgCode: "", site: site)
         case (.unsupported, _):
             // Synced from a newer build — can't fetch; keep whatever's stored.
             return []

@@ -565,6 +565,10 @@
 		E5X000001 /* SwiftMathRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5X000011 /* SwiftMathRenderer.swift */; };
 		E5Y000001 /* MathRenderScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5Y000011 /* MathRenderScheduler.swift */; };
 		E6A000001 /* AntigravityProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6A000011 /* AntigravityProvider.swift */; };
+		ETRAE0001 /* TraeProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = ETRAE0002 /* TraeProvider.swift */; };
+		ETRAE0003 /* TraeAgentProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = ETRAE0004 /* TraeAgentProvider.swift */; };
+		ETRAE0005 /* TraeOAuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = ETRAE0006 /* TraeOAuthManager.swift */; };
+		ERACC0001 /* RaccoonOAuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = ERACC0002 /* RaccoonOAuthManager.swift */; };
 		E6A000002 /* AntigravityModelsAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6A000012 /* AntigravityModelsAPI.swift */; };
 		E6A000003 /* AntigravityOAuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6A000013 /* AntigravityOAuthManager.swift */; };
 		E6A000004 /* AntigravityAgentProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6A000014 /* AntigravityAgentProvider.swift */; };
@@ -1380,6 +1384,10 @@
 		E5X000011 /* SwiftMathRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftMathRenderer.swift; sourceTree = "<group>"; };
 		E5Y000011 /* MathRenderScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MathRenderScheduler.swift; sourceTree = "<group>"; };
 		E6A000011 /* AntigravityProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AntigravityProvider.swift; sourceTree = "<group>"; };
+		ETRAE0002 /* TraeProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TraeProvider.swift; path = Providers/Trae/TraeProvider.swift; sourceTree = SOURCE_ROOT; };
+		ETRAE0004 /* TraeAgentProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TraeAgentProvider.swift; path = Providers/Trae/TraeAgentProvider.swift; sourceTree = SOURCE_ROOT; };
+		ETRAE0006 /* TraeOAuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TraeOAuthManager.swift; path = Providers/Trae/TraeOAuthManager.swift; sourceTree = SOURCE_ROOT; };
+		ERACC0002 /* RaccoonOAuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RaccoonOAuthManager.swift; path = Providers/Raccoon/RaccoonOAuthManager.swift; sourceTree = SOURCE_ROOT; };
 		E6A000012 /* AntigravityModelsAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AntigravityModelsAPI.swift; sourceTree = "<group>"; };
 		E6A000013 /* AntigravityOAuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AntigravityOAuthManager.swift; sourceTree = "<group>"; };
 		E6A000014 /* AntigravityAgentProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AntigravityAgentProvider.swift; sourceTree = "<group>"; };
@@ -1782,6 +1790,10 @@
 				E52000031 /* Anthropic */,
 				E58000030 /* Gemini */,
 				E6A000030 /* Antigravity */,
+				ETRAE0002 /* TraeProvider.swift */,
+				ETRAE0004 /* TraeAgentProvider.swift */,
+				ETRAE0006 /* TraeOAuthManager.swift */,
+				ERACC0002 /* RaccoonOAuthManager.swift */,
 				E5C000030 /* OpenAI */,
 				E7A000030 /* OpenRouter */,
 				EXA000030 /* xAI */,
@@ -3394,6 +3406,10 @@
 				E58000002 /* GeminiModelsAPI.swift in Sources */,
 				E58000003 /* GeminiOAuthManager.swift in Sources */,
 				E6A000001 /* AntigravityProvider.swift in Sources */,
+				ETRAE0001 /* TraeProvider.swift in Sources */,
+				ETRAE0003 /* TraeAgentProvider.swift in Sources */,
+				ETRAE0005 /* TraeOAuthManager.swift in Sources */,
+				ERACC0001 /* RaccoonOAuthManager.swift in Sources */,
 				E6A000002 /* AntigravityModelsAPI.swift in Sources */,
 				E6A000003 /* AntigravityOAuthManager.swift in Sources */,
 				E6A000004 /* AntigravityAgentProvider.swift in Sources */,
