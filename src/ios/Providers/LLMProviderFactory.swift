@@ -81,7 +81,7 @@ enum LLMProviderFactory {
         case .workBuddy:
             return openCode(makeWorkBuddyProvider(instance: instance, model: entry.model))
         case .trae, .traeIntl:
-            return openCode(makeTraeProvider(instance: instance, model: entry.model))
+            return makeTraeProvider(instance: instance, model: entry.model)
         case .raccoon:
             return openCode(makeRaccoonProvider(instance: instance, model: entry.model))
         case .unsupported:

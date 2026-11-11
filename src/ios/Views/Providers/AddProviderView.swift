@@ -1326,6 +1326,10 @@ struct AddProviderView: View {
             return AppLocalized("Unofficial integration. Using it may get your GitHub Copilot account restricted — use at your own risk.")
         case (.workBuddy, _):
             return AppLocalized("Sign in with your WorkBuddy / WorkBuddy AI subscription.")
+        case (.trae, _), (.traeIntl, _):
+            return AppLocalized("Sign in with your Trae account. Trae login grants access to its model catalog.")
+        case (.raccoon, _):
+            return AppLocalized("Sign in with your Raccoon account. Raccoon login grants access to its model catalog.")
         case (.unsupported, _):
             return AppLocalized("This provider isn't supported in this app version.")
         }

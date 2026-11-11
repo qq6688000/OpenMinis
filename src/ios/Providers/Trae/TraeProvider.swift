@@ -67,7 +67,7 @@ final class TraeProvider: LLMProvider {
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
         request.setValue("Cloud-IDE-JWT \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("Trae/0.1.61", forHTTPHeaderField: "User-Agent")
-        if let uid = TraeOAuthManager.shared.userID(instanceId: instanceId) {
+        if let uid = await TraeOAuthManager.shared.userID(instanceId: instanceId) {
             request.setValue(uid, forHTTPHeaderField: "X-Uid")
         }
 

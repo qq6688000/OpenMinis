@@ -3324,11 +3324,11 @@ final class ProviderConfigStore: ObservableObject {
         case (.trae, _), (.traeIntl, _):
             let token = try await TraeOAuthManager.shared.validAccessToken(instanceId: instance.id)
             let site = instance.traeSite ?? .china
-            return TraeModelsAPI.fetchModels(accessToken: token, site: site)
+            return await TraeModelsAPI.fetchModels(accessToken: token, site: site)
         case (.raccoon, _):
             let token = try await RaccoonOAuthManager.shared.validAccessToken(instanceId: instance.id)
             let site = instance.raccoonSite ?? .work
-            return RaccoonModelsAPI.fetchModels(accessToken: token, orgCode: "", site: site)
+            return await RaccoonModelsAPI.fetchModels(accessToken: token, orgCode: "", site: site)
         case (.unsupported, _):
             // Synced from a newer build — can't fetch; keep whatever's stored.
             return []
