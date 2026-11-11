@@ -12,10 +12,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: ipa-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   ipa:
     runs-on: macos-14
