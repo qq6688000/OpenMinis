@@ -1621,16 +1621,13 @@ struct UnifiedModelPicker: View {
     /// Latency badge text (e.g. "120ms") for an entry, or nil when untested.
     /// Reads the latency cache directly from UserDefaults (where ChatOptimizer
     /// persists it) so this non-isolated view helper stays off the MainActor.
-    /// [T-speedtest-unavailable] Grey wifi if the provider delisted the model OR
-    /// our most recent speed test for it failed (recorded in `errors`). The model
-    /// list shows the failed state so the user knows, but a soft failure does NOT
-    /// feed `unavailable` (used by auto-switch) — see ChatOptimizer.speedTestAll.
+    /// [T-speedtest-unavailable] Grey wifi ONLY when the provider has delisted the
+    /// model. A failed speed test is a SOFT signal (transient network/auth blip)
+    /// and must NOT grey out a model the user knows works — so we no longer read
+    /// `errors` here. The latency badge still shows a short failure hint, but the
+    /// wifi stays green for any provider-listed model.
     private func isEntryUnavailable(_ entry: ModelEntry) -> Bool {
-        if entry.isUnavailableFromProvider { return true }
-        let key = "chatOptimizer.latencyCache"
-        guard let data = UserDefaults.standard.data(forKey: key),
-              let cache = try? JSONDecoder().decode(ModelLatencyCache.self, from: data) else { return false }
-        return cache.errors[entry.id] != nil
+        entry.isUnavailableFromProvider
     }
 
     private func latencyBadgeText(for entry: ModelEntry) -> String? {
@@ -1641,11 +1638,9 @@ struct UnifiedModelPicker: View {
             let ms = Int((seconds * 1000).rounded())
             return "\(ms)ms"
         }
-        // Soft failure: show a short reason so the grey wifi isn't cryptic.
-        if let err = cache.errors[entry.id] {
-            let short = (err as NSString).replacingOccurrences(of: "http", with: "")
-            return "⚠️ \(short.prefix(24))"
-        }
+        // A failed speed test is a soft signal (transient error) — do NOT surface a
+        // warning badge for it. Only successfully-tested models show latency; the
+        // rest show nothing, so a working model is never flagged as "abnormal".
         return nil
     }
 
