@@ -292,6 +292,8 @@ struct UnifiedModelPicker: View {
     @State private var latencyTick: Int = 0
     /// [T-quick-speedtest] Whether a manual "speed test all" is in flight.
     @State private var speedTestingAll: Bool = false
+    /// [T-quick-speedtest] "done/total" progress text while speed testing.
+    @State private var speedTestProgress: String?
 
     /// [T-picker-provider-edit] Identifiable wrapper so `.sheet(item:)` can drive
     /// the provider detail page.
@@ -887,17 +889,33 @@ struct UnifiedModelPicker: View {
             }
         } else {
             // [T-quick-speedtest] Manual "speed test all models" button (top-left).
+            // Tests EVERY model of EVERY account (not just the ones the agent
+            // would auto-pick), and retries models that failed before.
             ToolbarItem(placement: .topBarLeading) {
                 Button {
                     Task { @MainActor in
                         speedTestingAll = true
+                        speedTestProgress = nil
                         let sid = config.currentSessionId?()
-                        await ChatOptimizer.shared.speedTestAll(sessionId: sid)
+                        await ChatOptimizer.shared.speedTestAll(
+                            sessionId: sid,
+                            concurrency: 6,
+                            includeAllAccounts: true,
+                            progress: { done, total in
+                                Task { @MainActor in speedTestProgress = "\(done)/\(total)" }
+                            }
+                        )
                         speedTestingAll = false
+                        speedTestProgress = nil
                     }
                 } label: {
                     if speedTestingAll {
-                        ProgressView().controlSize(.small)
+                        HStack(spacing: 4) {
+                            ProgressView().controlSize(.small)
+                            if let p = speedTestProgress {
+                                Text(p).font(.caption2.monospacedDigit())
+                            }
+                        }
                     } else {
                         Image(systemName: "speedometer")
                     }

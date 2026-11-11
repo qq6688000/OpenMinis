@@ -140,6 +140,15 @@ final class ChatOptimizer {
         return result
     }
 
+    /// [T-speedtest-all-accounts] EVERY model across EVERY configured account —
+    /// enabled or not, hidden or not, previously-failed or not. This is what the
+    /// manual "speed test all" button uses so a model that failed once is still
+    /// retried (and can recover), and accounts the agent wouldn't auto-pick are
+    /// included too. Only entries with no provider instance at all are dropped.
+    func allEntriesAcrossAccounts() -> [ModelEntry] {
+        store.modelEntries.filter { store.instance(for: $0.providerInstanceId) != nil }
+    }
+
     /// Measure first-token latency for one entry using a tiny prompt.
     /// Returns seconds, or nil on failure.
     /// `sessionId` must be a real session for OpenCode-routed models; pass nil
@@ -173,9 +182,14 @@ final class ChatOptimizer {
 
     /// Speed-test every available entry (respecting an overall budget), update
     /// the cache with the best latency seen per entry.
-    func speedTestAll(sessionId: String?, concurrency: Int = 4, perEntryTimeout: TimeInterval = 20) async {
-        let entries = availableEntries()
+    func speedTestAll(sessionId: String?, concurrency: Int = 4, perEntryTimeout: TimeInterval = 20,
+                      includeAllAccounts: Bool = false, progress: ((Int, Int) -> Void)? = nil) async {
+        // [T-speedtest-all-accounts] The manual button passes includeAllAccounts:
+        // true so every model of every account is measured (and previously failed
+        // ones get retried). Background auto-testing keeps the narrower set.
+        let entries = includeAllAccounts ? allEntriesAcrossAccounts() : availableEntries()
         guard !entries.isEmpty else { return }
+        progress?(0, entries.count)
         let cache = readLatencyCache()
         var updated = cache
 
@@ -184,6 +198,7 @@ final class ChatOptimizer {
         await withTaskGroup(of: (String, Double?).self) { group in
             var idx = 0
             var inFlight = 0
+            var done = 0
             // Seed the group up to concurrency.
             func pump() {
                 while idx < entries.count, inFlight < concurrency {
@@ -203,6 +218,8 @@ final class ChatOptimizer {
                 } else if !updated.unavailable.contains(id) {
                     updated.unavailable.append(id)
                 }
+                done += 1
+                progress?(done, entries.count)
                 pump()
             }
         }
