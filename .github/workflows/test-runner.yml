@@ -1,0 +1,10 @@
+name: Runner Test
+on:
+  workflow_dispatch:
+  push:
+    branches: [workbuddy-1.15]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "ubuntu runner works"
