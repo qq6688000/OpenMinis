@@ -33,6 +33,15 @@ struct ModelLatencyCache: Codable {
     var entries: [String: Double] = [:]
     /// Entry ids whose speed test failed (treated as unusable for auto-switch).
     var unavailable: [String] = []
+    /// [T-speedtest-diag] Why a given entry failed, keyed by entry id.
+    var errors: [String: String] = [:]
+}
+
+/// [T-speedtest-diag] Result of one latency probe: seconds on success, or the
+/// failure reason (so the picker can explain a grey wifi).
+struct LatencyProbe: Sendable {
+    let seconds: Double?
+    let error: String?
 }
 
 /// Errors surfaced by `ChatOptimizer`.
@@ -140,20 +149,27 @@ final class ChatOptimizer {
         return result
     }
 
-    /// [T-speedtest-all-accounts] EVERY model across EVERY configured account —
-    /// enabled or not, hidden or not, previously-failed or not. This is what the
-    /// manual "speed test all" button uses so a model that failed once is still
-    /// retried (and can recover), and accounts the agent wouldn't auto-pick are
-    /// included too. Only entries with no provider instance at all are dropped.
+    /// [T-speedtest-all-accounts] EVERY chat-capable model across EVERY configured
+    /// account — enabled or not, hidden or not, previously-failed or not. This is
+    /// what the manual "speed test all" button uses so a model that failed once is
+    /// still retried (and can recover), and accounts the agent wouldn't auto-pick
+    /// are included too.
+    ///
+    /// Pure image/video/audio-generation models (no `textOutput`) are excluded:
+    /// a chat ping against them always fails, and marking them "unavailable"
+    /// would wrongly grey out models that work fine for their own modality.
     func allEntriesAcrossAccounts() -> [ModelEntry] {
-        store.modelEntries.filter { store.instance(for: $0.providerInstanceId) != nil }
+        store.modelEntries.filter { entry in
+            guard store.instance(for: entry.providerInstanceId) != nil else { return false }
+            return entry.model.capabilities.supportedModalities.contains(.textOutput)
+        }
     }
 
     /// Measure first-token latency for one entry using a tiny prompt.
     /// Returns seconds, or nil on failure.
     /// `sessionId` must be a real session for OpenCode-routed models; pass nil
     /// only for providers that don't need one (most will fail without it).
-    func measureLatency(entry: ModelEntry, sessionId: String?) async -> Double? {
+    func measureLatency(entry: ModelEntry, sessionId: String?) async -> LatencyProbe {
         let messages: [LLMMessage] = [
             LLMMessage(role: .user, content: "hi")
         ]
@@ -169,14 +185,15 @@ final class ChatOptimizer {
             )
             for try await chunk in stream {
                 if case .text(let t) = chunk, !t.isEmpty {
-                    return Date().timeIntervalSince(start)
+                    return LatencyProbe(seconds: Date().timeIntervalSince(start), error: nil)
                 }
             }
             // Stream ended with no text — treat as a (slow) miss.
-            return nil
+            return LatencyProbe(seconds: nil, error: "no text returned")
         } catch {
-            AppLogger(category: "ChatOptimizer").info("[latency] \(entry.id) failed: \(error.localizedDescription)")
-            return nil
+            let msg = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            AppLogger(category: "ChatOptimizer").warning("[latency] \(entry.id) failed: \(msg)")
+            return LatencyProbe(seconds: nil, error: msg)
         }
     }
 
@@ -195,7 +212,7 @@ final class ChatOptimizer {
 
         // Run with a bounded concurrency using a simple actor-free serial loop
         // with TaskGroup-equivalent manual pacing: we cap simultaneous in-flight.
-        await withTaskGroup(of: (String, Double?).self) { group in
+        await withTaskGroup(of: (String, LatencyProbe).self) { group in
             var idx = 0
             var inFlight = 0
             var done = 0
@@ -204,19 +221,21 @@ final class ChatOptimizer {
                 while idx < entries.count, inFlight < concurrency {
                     let e = entries[idx]; idx += 1; inFlight += 1
                     group.addTask {
-                        let lat = await self.measureLatency(entry: e, sessionId: sessionId)
-                        return (e.id, lat)
+                        let probe = await self.measureLatency(entry: e, sessionId: sessionId)
+                        return (e.id, probe)
                     }
                 }
             }
             pump()
-            for await (id, lat) in group {
+            for await (id, probe) in group {
                 inFlight -= 1
-                if let lat = lat {
+                if let lat = probe.seconds {
                     updated.entries[id] = lat
                     updated.unavailable.removeAll { $0 == id }   // recovered
-                } else if !updated.unavailable.contains(id) {
-                    updated.unavailable.append(id)
+                    updated.errors.removeValue(forKey: id)
+                } else {
+                    if !updated.unavailable.contains(id) { updated.unavailable.append(id) }
+                    updated.errors[id] = probe.error
                 }
                 done += 1
                 progress?(done, entries.count)

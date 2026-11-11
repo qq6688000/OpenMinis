@@ -1563,11 +1563,11 @@ struct UnifiedModelPicker: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 // [T-optimize-prompt] Availability wifi icon + latency badge on the
-                // trailing edge. Green = reachable; grey = unavailable. Latency is
-                // measured in the background and refreshes via latencyTick.
+                // trailing edge. Green = reachable; grey = unavailable (either the
+                // provider delisted it, or our speed test failed for it).
                 Image(systemName: "wifi")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(entry.isUnavailableFromProvider ? Color(UIColor.tertiaryLabel) : Color.green)
+                    .foregroundStyle(isEntryUnavailable(entry) ? Color(UIColor.tertiaryLabel) : Color.green)
                     .frame(width: 18)
                 if let ms = latencyBadgeText(for: entry) {
                     Text(ms)
@@ -1621,6 +1621,17 @@ struct UnifiedModelPicker: View {
     /// Latency badge text (e.g. "120ms") for an entry, or nil when untested.
     /// Reads the latency cache directly from UserDefaults (where ChatOptimizer
     /// persists it) so this non-isolated view helper stays off the MainActor.
+    /// [T-speedtest-unavailable] An entry is unusable if the provider delisted it
+    /// OR our speed test for it failed. Both feed the grey wifi icon and the
+    /// auto-switch decision, so a model that errors on call shows up grey here.
+    private func isEntryUnavailable(_ entry: ModelEntry) -> Bool {
+        if entry.isUnavailableFromProvider { return true }
+        let key = "chatOptimizer.latencyCache"
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let cache = try? JSONDecoder().decode(ModelLatencyCache.self, from: data) else { return false }
+        return cache.unavailable.contains(entry.id)
+    }
+
     private func latencyBadgeText(for entry: ModelEntry) -> String? {
         let key = "chatOptimizer.latencyCache"
         guard let data = UserDefaults.standard.data(forKey: key),
