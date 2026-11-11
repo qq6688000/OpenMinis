@@ -271,61 +271,45 @@ extension AIChatView {
     /// first time it becomes non-nil, switch the session to another available
     /// model and retry once. Stops after one switch so it cannot loop forever.
     @MainActor
+    /// [T-auto-switch-on-error] Poll until the turn ends (or ~5 min), then do a
+    /// FINAL error check. Provider errors (404 / Rate limited) are written into
+    /// the assistant row's text blocks, not always to vm.errorMessage — so we
+    /// match all three sources: vm.errorMessage, the row's `error` field, and
+    /// the row's block text via `looksLikeError`. On a hit, switch model + retry
+    /// once (no loop). Independent of the 10s stall timer and its toggle.
+    @MainActor
     private func watchForSendErrorAndSwitch() {
-        Task { [weak vm] in
-            guard let vm = vm else { return }
-            var switched = false
-            // Watch for the whole turn (up to ~5 min), not just 30s: a rate
-            // limit can surface after a long stall. Any error → switch + retry.
-            for _ in 0..<1200 {
-                try? await Task.sleep(nanoseconds: 250_000_000)
-                if Task.isCancelled { return }
-                guard let err = vm.errorMessage, !err.isEmpty else {
-                    if !vm.isProcessing { return }
-                    continue
-                }
-                guard !switched else { return }
-                guard ChatOptimizer.shared.autoSwitchUnavailableEnabled else { return }
-                guard let sid = vm.sessionId, !sid.isEmpty else { return }
-                AppLogger(category: "ChatOptimizer").warning("[autoSwitch] error: \(err.prefix(120)) — switching model and retrying")
-                if ChatOptimizer.shared.switchToNextAvailable(sessionId: sid) {
-                    switched = true
-                    vm.errorMessage = nil
-                    vm.retry()
-                }
-                return
-            }
-        }
+        watchForErrorAndSwitch(useRowText: false)
     }
 
-    /// [T-auto-switch-on-error] Watch per-message error (rate-limit and provider
-    /// errors land on the assistant row, not always on vm.errorMessage). Also
-    /// switches to another model and retries, once.
+    /// [T-auto-switch-on-error] Watch per-message error (rate-limit / provider
+    /// errors land on the assistant row, not always on vm.errorMessage).
     @MainActor
     private func watchForMessageErrorAndSwitch() {
+        watchForErrorAndSwitch(useRowText: true)
+    }
+
+    private func watchForErrorAndSwitch(useRowText: Bool) {
         Task { [weak vm] in
             guard let vm = vm else { return }
             var switched = false
+            // Poll for the whole turn. A 404/rate-limit can surface right at the
+            // end, so we keep watching until isProcessing flips false, then do a
+            // final check before giving up.
             for _ in 0..<1200 {
                 try? await Task.sleep(nanoseconds: 250_000_000)
                 if Task.isCancelled { return }
-                // Errors land in THREE places across provider types: vm.errorMessage
-                // (some), the assistant row's `error` field (others), and the
-                // assistant row's text blocks (e.g. "Provider error: [404]").
-                // Match all three so a model failure never slips past.
-                let msgErr = vm.messages.last?.error
-                let blockErr = (vm.messages.last?.role == .assistant) ? Self.looksLikeError(vm.messages.last) : false
-                let combined = (msgErr?.isEmpty == false ? msgErr : nil)
-                    ?? vm.errorMessage
-                    ?? (blockErr ? "assistant row error" : nil)
-                guard let err = combined, !err.isEmpty else {
+                let err = self.currentErrorText(vm: vm, useRowText: useRowText)
+                if err == nil {
+                    // Still processing (or clean) — keep watching unless the turn
+                    // is over with no error.
                     if !vm.isProcessing { return }
                     continue
                 }
                 guard !switched,
                       ChatOptimizer.shared.autoSwitchUnavailableEnabled,
                       let sid = vm.sessionId, !sid.isEmpty else { return }
-                AppLogger(category: "ChatOptimizer").warning("[autoSwitch] row error: \(err.prefix(120)) — switching model")
+                AppLogger(category: "ChatOptimizer").warning("[autoSwitch] error: \(err!.prefix(120)) — switching model and retrying")
                 if ChatOptimizer.shared.switchToNextAvailable(sessionId: sid) {
                     switched = true
                     vm.errorMessage = nil
@@ -335,5 +319,16 @@ extension AIChatView {
                 return
             }
         }
+    }
+
+    /// Unified error-source reader: vm.errorMessage, the assistant row's `error`
+    /// field, and (when useRowText) the row's block text via `looksLikeError`.
+    private func currentErrorText(vm: AIChatViewModel, useRowText: Bool) -> String? {
+        if let e = vm.errorMessage, !e.isEmpty { return e }
+        if let e = vm.messages.last?.error, !(e?.isEmpty ?? true) { return e }
+        if useRowText, let last = vm.messages.last, last.role == .assistant, Self.looksLikeError(last) {
+            return "assistant row error"
+        }
+        return nil
     }
 }
