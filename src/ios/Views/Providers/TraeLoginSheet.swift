@@ -168,14 +168,32 @@ struct TraeWebView: UIViewRepresentable {
             self.onCallback = onCallback
         }
 
+        /// Trae's auth page redirects to a loopback URL carrying the auth
+        /// payload. We intercept it before any real request by checking the
+        /// query, not the host — iOS may route 127.0.0.1 connections through
+        /// the OS and skip decidePolicyFor, so also catch the provisional
+        /// failure below.
+        private func isCallback(_ url: URL) -> Bool {
+            guard let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems else { return false }
+            return items.contains { ["authCodeInfo", "code", "refreshToken", "error"].contains($0.name) }
+        }
+
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-            if let url = navigationAction.request.url, url.host == "127.0.0.1", !handled {
+            if let url = navigationAction.request.url, !handled, isCallback(url) {
                 handled = true
                 onCallback(url)
                 decisionHandler(.cancel)
                 return
             }
             decisionHandler(.allow)
+        }
+
+        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+            guard !handled else { return }
+            if let url = (error as NSError).userInfo[NSURLErrorFailingURLErrorKey] as? URL, isCallback(url) {
+                handled = true
+                onCallback(url)
+            }
         }
     }
 }
