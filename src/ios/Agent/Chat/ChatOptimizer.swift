@@ -416,14 +416,19 @@ final class ChatOptimizer {
     @MainActor
     func switchToNextAvailable(sessionId: String) -> Bool {
         let active = currentEntry(for: sessionId)
-        // [T-speedtest-soft-fail] Do NOT exclude speed-test failures here: a soft
-        // (transient) failure must not permanently remove a working model from
-        // the auto-switch pool. Only provider-delisted models are skipped.
-        let others = availableEntries().filter {
+        // [T-speedtest-soft-fail] Speed-test failures don't hard-exclude a model,
+        // but when picking a replacement we PREFER models we know work (a measured
+        // latency), then untested ones, and only last the ones that just failed —
+        // otherwise we'd keep swapping into other broken models.
+        let cache = readLatencyCache()
+        let pool = availableEntries().filter {
             $0.id != active?.id &&
             !$0.isUnavailableFromProvider && !$0.isHidden
         }
-        guard let replacement = others.first else { return false }
+        let known = pool.filter { cache.entries[$0.id] != nil }
+        let untested = pool.filter { cache.entries[$0.id] == nil && cache.errors[$0.id] == nil }
+        let failed = pool.filter { cache.errors[$0.id] != nil && cache.entries[$0.id] == nil }
+        guard let replacement = (known.first ?? untested.first ?? failed.first) else { return false }
         bindSession(sessionId, to: replacement)
         AppLogger(category: "ChatOptimizer").info("[autoSwitch] on-failure switched \(active?.id ?? "nil") → \(replacement.id)")
         return true

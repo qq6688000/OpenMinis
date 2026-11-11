@@ -263,7 +263,13 @@ extension AIChatView {
         guard let message = message else { return false }
         let joined = message.blocks.compactMap { $0.kind == .text ? $0.content : nil }
             .joined(separator: " ")
-        let markers = ["Provider error", "[404]", "模型不存在", "未启用", "not found", "not enabled", "does not exist", "model is not"]
+        // [T-auto-switch-markers] Cover every provider error wording, including
+        // rate limiting ("Rate limited — please try again later" has no
+        // "Provider error" prefix) and the various 404 model-missing phrasings.
+        let markers = ["Provider error", "[404]", "Rate limited", "rate limit",
+                       "模型不存在", "未启用", "not found", "not enabled",
+                       "does not exist", "model is not", "Service temporarily unavailable",
+                       "Invalid API key"]
         return markers.contains { joined.contains($0) }
     }
 
@@ -312,7 +318,18 @@ extension AIChatView {
                 if ChatOptimizer.shared.switchToNextAvailable(sessionId: sid) {
                     switched = true
                     vm.errorMessage = nil
-                    vm.messages.last?.error = nil
+                    // Clear the error on the assistant row that actually holds it
+                    // (messages.last can be a queued user row).
+                    if let idx = vm.messages.lastIndex(where: { $0.role == .assistant }) {
+                        vm.messages[idx].error = nil
+                    }
+                    // vm.retry() early-returns while isProcessing is true, so wait
+                    // for the failed turn to fully settle before re-sending.
+                    for _ in 0..<40 {
+                        if !vm.isProcessing { break }
+                        try? await Task.sleep(nanoseconds: 250_000_000)
+                        if Task.isCancelled { return }
+                    }
                     vm.retry()
                 }
                 return
@@ -320,12 +337,17 @@ extension AIChatView {
         }
     }
 
-    /// Unified error-source reader: vm.errorMessage, the assistant row's `error`
-    /// field, and (when useRowText) the row's block text via `looksLikeError`.
+    /// Unified error-source reader: vm.errorMessage, the LAST ASSISTANT row's
+    /// `error` field, and (when useRowText) that row's block text via
+    /// `looksLikeError`. The assistant row is resolved with
+    /// `last(where: role == .assistant)` because `messages.last` can be a queued
+    /// user row appended mid-tool (the same reason the error epilogue writes to
+    /// that row, not to `messages.last`).
     private func currentErrorText(vm: AIChatViewModel, useRowText: Bool) -> String? {
         if let e = vm.errorMessage, !e.isEmpty { return e }
-        if let e = vm.messages.last?.error, !e.isEmpty { return e }
-        if useRowText, let last = vm.messages.last, last.role == .assistant, Self.looksLikeError(last) {
+        let lastAssistant = vm.messages.last(where: { $0.role == .assistant })
+        if let err = lastAssistant?.error, !err.isEmpty { return err }
+        if useRowText, Self.looksLikeError(lastAssistant) {
             return "assistant row error"
         }
         return nil
