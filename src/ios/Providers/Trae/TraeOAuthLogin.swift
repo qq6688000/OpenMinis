@@ -278,16 +278,23 @@ enum TraePKCE {
     static func random() -> (verifier: String, challenge: String) {
         var bytes = [UInt8](repeating: 0, count: 64)
         _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
-        let verifier = Data(bytes).base64URLEncodedCodex()
+        let verifier = base64URL(Data(bytes))
         let hash = SHA256.hash(data: Data(verifier.utf8))
-        let challenge = Data(hash).base64URLEncodedCodex()
+        let challenge = base64URL(Data(hash))
         return (verifier, challenge)
     }
 
     static func randomHex(bytes: Int) -> String {
         var data = [UInt8](repeating: 0, count: bytes)
-        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &data)
+        _ = SecRandomCopyBytes(kSecRandomDefault, bytes, &data)
         return data.map { String(format: "%02x", $0) }.joined()
+    }
+
+    private static func base64URL(_ data: Data) -> String {
+        data.base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
     }
 }
 
