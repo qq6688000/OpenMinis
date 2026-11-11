@@ -242,7 +242,12 @@ final class ChatOptimizer {
                     updated.unavailable.removeAll { $0 == id }   // recovered
                     updated.errors.removeValue(forKey: id)
                 } else {
-                    if !updated.unavailable.contains(id) { updated.unavailable.append(id) }
+                    // [T-speedtest-soft-fail] A failed speed test is NOT proof the
+                    // model is unusable — transient network/auth blips would wrongly
+                    // grey out working models (user reported "everything but WorkBuddy
+                    // is grey"). So we only RECORD the failure reason for the UI, and
+                    // do NOT add it to `unavailable` (which feeds auto-switch). The
+                    // grey wifi is driven by `errors`, not `unavailable`.
                     updated.errors[id] = probe.error
                 }
                 done += 1
@@ -274,18 +279,16 @@ final class ChatOptimizer {
     /// return a replacement entry. Returns nil when no switch is needed.
     func replacementIfUnavailable(_ active: ModelEntry?) -> ModelEntry? {
         guard let active = active else { return nil }
-        // Still good? (provider-listed, enabled, has creds, and NOT speed-tested as
-        // failing). If it failed a background speed test we treat it as unusable.
-        let testedUnavailable = readLatencyCache().unavailable.contains(active.id)
+        // Provider-delisted models are hard-unavailable. Speed-test failures are
+        // NOT treated as unavailable here (soft-fail), so they don't trigger a
+        // pre-send swap — only a real call-time error does (via the watchers).
         if let inst = store.instance(for: active.providerInstanceId),
            inst.isEnabled, inst.hasAnyCredential, !active.isHidden,
-           !active.isUnavailableFromProvider, !testedUnavailable {
+           !active.isUnavailableFromProvider {
             return nil
         }
-        // Find another available entry (prefer same instance, then any), and skip
-        // entries we already know failed a speed test.
-        let bad = readLatencyCache().unavailable
-        let others = availableEntries().filter { $0.id != active.id && !bad.contains($0.id) }
+        // Find another available entry (prefer same instance, then any).
+        let others = availableEntries().filter { $0.id != active.id }
         if let sameInstance = others.first(where: { $0.providerInstanceId == active.providerInstanceId }) {
             return sameInstance
         }
@@ -413,9 +416,11 @@ final class ChatOptimizer {
     @MainActor
     func switchToNextAvailable(sessionId: String) -> Bool {
         let active = currentEntry(for: sessionId)
-        let bad = readLatencyCache().unavailable
+        // [T-speedtest-soft-fail] Do NOT exclude speed-test failures here: a soft
+        // (transient) failure must not permanently remove a working model from
+        // the auto-switch pool. Only provider-delisted models are skipped.
         let others = availableEntries().filter {
-            $0.id != active?.id && !bad.contains($0.id) &&
+            $0.id != active?.id &&
             !$0.isUnavailableFromProvider && !$0.isHidden
         }
         guard let replacement = others.first else { return false }

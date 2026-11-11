@@ -309,8 +309,15 @@ extension AIChatView {
             for _ in 0..<1200 {
                 try? await Task.sleep(nanoseconds: 250_000_000)
                 if Task.isCancelled { return }
+                // Errors land in THREE places across provider types: vm.errorMessage
+                // (some), the assistant row's `error` field (others), and the
+                // assistant row's text blocks (e.g. "Provider error: [404]").
+                // Match all three so a model failure never slips past.
                 let msgErr = vm.messages.last?.error
-                let combined = (msgErr?.isEmpty == false ? msgErr : nil) ?? vm.errorMessage
+                let blockErr = (vm.messages.last?.role == .assistant) ? Self.looksLikeError(vm.messages.last) : false
+                let combined = (msgErr?.isEmpty == false ? msgErr : nil)
+                    ?? vm.errorMessage
+                    ?? (blockErr ? "assistant row error" : nil)
                 guard let err = combined, !err.isEmpty else {
                     if !vm.isProcessing { return }
                     continue

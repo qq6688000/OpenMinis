@@ -1621,24 +1621,32 @@ struct UnifiedModelPicker: View {
     /// Latency badge text (e.g. "120ms") for an entry, or nil when untested.
     /// Reads the latency cache directly from UserDefaults (where ChatOptimizer
     /// persists it) so this non-isolated view helper stays off the MainActor.
-    /// [T-speedtest-unavailable] An entry is unusable if the provider delisted it
-    /// OR our speed test for it failed. Both feed the grey wifi icon and the
-    /// auto-switch decision, so a model that errors on call shows up grey here.
+    /// [T-speedtest-unavailable] Grey wifi if the provider delisted the model OR
+    /// our most recent speed test for it failed (recorded in `errors`). The model
+    /// list shows the failed state so the user knows, but a soft failure does NOT
+    /// feed `unavailable` (used by auto-switch) — see ChatOptimizer.speedTestAll.
     private func isEntryUnavailable(_ entry: ModelEntry) -> Bool {
         if entry.isUnavailableFromProvider { return true }
         let key = "chatOptimizer.latencyCache"
         guard let data = UserDefaults.standard.data(forKey: key),
               let cache = try? JSONDecoder().decode(ModelLatencyCache.self, from: data) else { return false }
-        return cache.unavailable.contains(entry.id)
+        return cache.errors[entry.id] != nil
     }
 
     private func latencyBadgeText(for entry: ModelEntry) -> String? {
         let key = "chatOptimizer.latencyCache"
         guard let data = UserDefaults.standard.data(forKey: key),
-              let cache = try? JSONDecoder().decode(ModelLatencyCache.self, from: data),
-              let seconds = cache.entries[entry.id] else { return nil }
-        let ms = Int((seconds * 1000).rounded())
-        return "\(ms)ms"
+              let cache = try? JSONDecoder().decode(ModelLatencyCache.self, from: data) else { return nil }
+        if let seconds = cache.entries[entry.id] {
+            let ms = Int((seconds * 1000).rounded())
+            return "\(ms)ms"
+        }
+        // Soft failure: show a short reason so the grey wifi isn't cryptic.
+        if let err = cache.errors[entry.id] {
+            let short = (err as NSString).replacingOccurrences(of: "http", with: "")
+            return "⚠️ \(short.prefix(24))"
+        }
+        return nil
     }
 
     /// Modality tags and the "unavailable" tag, as HStack children.
