@@ -54,7 +54,7 @@ enum TraeLoginProfile {
     )
 
     static func of(_ site: TraeSite) -> Profile {
-        site == .china ? .china : .international
+        site == .china ? TraeLoginProfile.china : TraeLoginProfile.international
     }
 
     struct Profile: Sendable {
