@@ -550,7 +550,7 @@ enum TraeOAuthClient {
                 request.setValue("application/json", forHTTPHeaderField: "Accept")
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 request.setValue("", forHTTPHeaderField: "x-cloudide-token")
-                request.timeoutInterval = 15
+                request.timeoutInterval = 8
                 request.httpBody = payload
                 let (answer, response) = try await URLSession.shared.data(for: request)
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -641,7 +641,34 @@ enum TraeOAuthClient {
     }
 
     static func envelopeError(_ root: [String: Any]) -> String? {
-        for key in ["Message", "message", "Error", "error"] {
+        // AWS-style envelope: { ResponseMetadata: { Error: { Code, Message } } }
+        if let meta = root["ResponseMetadata"] as? [String: Any],
+           let err = meta["Error"] as? [String: Any] {
+            let code = (err["Code"] as? NSNumber)?.intValue
+                ?? Int(err["Code"] as? String ?? "")
+            if code != nil, code != 0 || (err["Message"] as? String)?.isEmpty == false {
+                return (err["Message"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                    ?? (code.map { "code \($0)" })
+            }
+        }
+        // flat envelope
+        for key in ["Code", "code", "ErrCode", "errCode"] {
+            guard let value = root[key] else { continue }
+            let code: Int? = if let number = value as? NSNumber {
+                number.intValue
+            } else if let text = value as? String {
+                Int(text)
+            } else {
+                nil
+            }
+            guard let code, code != 0 else { continue }
+            let message = firstString(root, ["Message", "message", "Msg", "msg", "ErrMsg", "errMsg"])
+            return message ?? "code \(code)"
+        }
+        if let error = root["Error"] as? String ?? root["error"] as? String, !error.isEmpty {
+            return error
+        }
+        for key in ["Message", "message"] {
             if let v = root[key] as? String, !v.isEmpty { return v }
         }
         return nil
