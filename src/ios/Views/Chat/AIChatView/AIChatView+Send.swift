@@ -194,6 +194,7 @@ extension AIChatView {
         // the 10s stall timer and its toggle.
         if ChatOptimizer.shared.autoSwitchUnavailableEnabled {
             watchForSendErrorAndSwitch()
+            watchForMessageErrorAndSwitch()
         }
         // [inline-voice] Stay in voice mode after sending — clear the recognized
         // text and re-arm listening for the next utterance (close with ✕).
@@ -274,22 +275,54 @@ extension AIChatView {
         Task { [weak vm] in
             guard let vm = vm else { return }
             var switched = false
-            // Watch for up to ~30s of the turn, or until an error shows up.
-            for _ in 0..<120 {
+            // Watch for the whole turn (up to ~5 min), not just 30s: a rate
+            // limit can surface after a long stall. Any error → switch + retry.
+            for _ in 0..<1200 {
                 try? await Task.sleep(nanoseconds: 250_000_000)
                 if Task.isCancelled { return }
                 guard let err = vm.errorMessage, !err.isEmpty else {
-                    // No error yet; stop watching once the turn finished cleanly.
-                    if !vm.isProcessing && vm.errorMessage == nil { return }
+                    if !vm.isProcessing { return }
                     continue
                 }
                 guard !switched else { return }
                 guard ChatOptimizer.shared.autoSwitchUnavailableEnabled else { return }
                 guard let sid = vm.sessionId, !sid.isEmpty else { return }
-                AppLogger(category: "ChatOptimizer").warning("[autoSwitch] send error detected: \(err.prefix(120)) — switching model")
+                AppLogger(category: "ChatOptimizer").warning("[autoSwitch] error: \(err.prefix(120)) — switching model and retrying")
                 if ChatOptimizer.shared.switchToNextAvailable(sessionId: sid) {
                     switched = true
                     vm.errorMessage = nil
+                    vm.retry()
+                }
+                return
+            }
+        }
+    }
+
+    /// [T-auto-switch-on-error] Watch per-message error (rate-limit and provider
+    /// errors land on the assistant row, not always on vm.errorMessage). Also
+    /// switches to another model and retries, once.
+    @MainActor
+    private func watchForMessageErrorAndSwitch() {
+        Task { [weak vm] in
+            guard let vm = vm else { return }
+            var switched = false
+            for _ in 0..<1200 {
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                if Task.isCancelled { return }
+                let msgErr = vm.messages.last?.error
+                let combined = (msgErr?.isEmpty == false ? msgErr : nil) ?? vm.errorMessage
+                guard let err = combined, !err.isEmpty else {
+                    if !vm.isProcessing { return }
+                    continue
+                }
+                guard !switched,
+                      ChatOptimizer.shared.autoSwitchUnavailableEnabled,
+                      let sid = vm.sessionId, !sid.isEmpty else { return }
+                AppLogger(category: "ChatOptimizer").warning("[autoSwitch] row error: \(err.prefix(120)) — switching model")
+                if ChatOptimizer.shared.switchToNextAvailable(sessionId: sid) {
+                    switched = true
+                    vm.errorMessage = nil
+                    vm.messages.last?.error = nil
                     vm.retry()
                 }
                 return
