@@ -347,6 +347,61 @@ enum TraeOAuthClient {
         return (exchanged.access, exchanged.refresh, exchanged.expires, userID, machineID, deviceID, exchanged.origin)
     }
 
+    // MARK: - WKWebView flow (no loopback listener, no Safari jump)
+
+    struct AuthContext: Sendable {
+        let profile: TraeLoginProfile.Profile
+        let pkceVerifier: String
+        let machineID: String
+        let deviceID: String
+        let authURL: URL
+    }
+
+    /// Builds the authorization URL for an in-app WebView. The redirect points
+    /// at a dummy loopback address — the WebView's navigation delegate
+    /// intercepts it before any real request is made.
+    static func buildAuthURL(profile: TraeLoginProfile.Profile) async throws -> AuthContext {
+        let pkce = TraePKCE.random()
+        let machineID = profile.deviceIdentity == .uuid
+            ? UUID().uuidString
+            : TraePKCE.randomHex(bytes: 32)
+        let deviceID = profile.fixedDeviceID ?? randomDeviceID()
+        let loginTraceID = UUID().uuidString
+        let loginHost = try await signInHost(profile: profile, loginTraceID: loginTraceID)
+        let redirect = "http://127.0.0.1:1" + TraeLoopback.callbackPath
+        let page = try loginURL(
+            loginHost: loginHost,
+            redirect: redirect,
+            machineID: machineID,
+            deviceID: deviceID,
+            loginTraceID: loginTraceID,
+            pkce: pkce,
+            profile: profile,
+        )
+        return AuthContext(profile: profile, pkceVerifier: pkce.verifier, machineID: machineID, deviceID: deviceID, authURL: page)
+    }
+
+    /// Processes the callback URL intercepted by the WebView: extracts the
+    /// auth code, exchanges it for a token, and returns the credentials.
+    static func processCallback(url: URL, context: AuthContext) async throws -> (access: String, refresh: String, expireAt: Date?, userID: String, machineID: String, deviceID: String, origin: String) {
+        let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        var parameters: [String: String] = [:]
+        for item in components?.queryItems ?? [] {
+            parameters[item.name] = item.value ?? ""
+        }
+        try checkCallbackError(parameters)
+        let payload = try callbackPayload(parameters)
+        let exchanged = try await exchange(
+            authCode: payload.authCode,
+            codeVerifier: context.pkceVerifier,
+            machineID: context.machineID,
+            deviceID: context.deviceID,
+            profile: context.profile,
+        )
+        let userID = payload.userID.isEmpty ? jwtUserID(exchanged.access) : payload.userID
+        return (exchanged.access, exchanged.refresh, exchanged.expires, userID, context.machineID, context.deviceID, exchanged.origin)
+    }
+
     static func signInHost(profile: TraeLoginProfile.Profile, loginTraceID: String) async throws -> String {
         if let fixed = profile.fixedLoginHost { return fixed }
         var failures: [String] = []
