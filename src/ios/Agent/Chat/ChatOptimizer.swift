@@ -173,9 +173,17 @@ final class ChatOptimizer {
         let messages: [LLMMessage] = [
             LLMMessage(role: .user, content: "hi")
         ]
+        // [T-speedtest-no-ui-session] When called from the model picker (no chat
+        // open) sessionId is nil, and OpenCode-family accounts hard-400 without a
+        // session id. Use a throwaway id so the probe actually fires; this is NOT
+        // a chat turn, so no conversation state is touched.
+        let effectiveSessionId: String? = {
+            if let s = sessionId, !s.isEmpty, !s.hasPrefix("__new__") { return s }
+            return OpenCodeChannel.oneOffSessionId()
+        }()
         let start = Date()
         do {
-            let provider = try await LLMProviderFactory.makeProvider(for: entry, sessionId: sessionId)
+            let provider = try await LLMProviderFactory.makeProvider(for: entry, sessionId: effectiveSessionId)
             // Use the streaming path so we can capture time-to-first-token.
             let stream = try await provider.streamMessage(
                 messages: messages,
