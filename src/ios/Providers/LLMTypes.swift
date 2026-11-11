@@ -847,6 +847,14 @@ struct LLMModel: Equatable, Hashable, Identifiable, Sendable, Codable {
             supportedModalities: ProviderType.workBuddy.defaultModality,
             supportedAuth: [.oauth]
         ),
+        "Trae": ModelCapabilities(
+            supportedModalities: ProviderType.trae.defaultModality,
+            supportedAuth: [.oauth]
+        ),
+        "Raccoon": ModelCapabilities(
+            supportedModalities: ProviderType.raccoon.defaultModality,
+            supportedAuth: [.oauth]
+        ),
     ]
 
     /// Default capabilities when the provider is unknown.

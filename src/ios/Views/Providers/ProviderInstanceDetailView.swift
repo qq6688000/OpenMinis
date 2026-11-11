@@ -668,6 +668,8 @@ struct ProviderInstanceDetailView: View {
         case .kimiCode: return "https://api.kimi.com/coding"
         case .githubCopilot: return CopilotConstants.apiBaseURL
         case .workBuddy: return (instance.workBuddySite ?? .china).chatBaseURL
+        case .trae, .traeIntl: return (instance.traeSite ?? .china).remoteBase
+        case .raccoon: return (instance.raccoonSite ?? .work).chatBaseURL
         case .unsupported: return "—"
         }
     }
@@ -1109,6 +1111,8 @@ struct ProviderInstanceDetailView: View {
         case .kimiCode: return KimiOAuthManager.shared.isAuthenticated(instanceId: instance.id)
         case .githubCopilot: return CopilotOAuthManager.shared.isAuthenticated(instanceId: instance.id)
         case .workBuddy: return WorkBuddyOAuthManager.shared.isAuthenticated(instanceId: instance.id)
+        case .trae, .traeIntl: return TraeOAuthManager.shared.isAuthenticated(instanceId: instance.id)
+        case .raccoon: return RaccoonOAuthManager.shared.isAuthenticated(instanceId: instance.id)
         case .unsupported: return false // synced from newer build
         }
     }
@@ -1179,6 +1183,18 @@ struct ProviderInstanceDetailView: View {
                 return name.map { "\($0) · \(AppLocalized("Authenticated"))" } ?? AppLocalized("Authenticated")
             }
             return AppLocalized("Not authenticated")
+        case .trae, .traeIntl:
+            let name = TraeOAuthManager.shared.accountName(instanceId: instance.id)
+            if TraeOAuthManager.shared.isAuthenticated(instanceId: instance.id) {
+                return name.map { "\($0) · \(AppLocalized("Authenticated"))" } ?? AppLocalized("Authenticated")
+            }
+            return AppLocalized("Not authenticated")
+        case .raccoon:
+            let name = RaccoonOAuthManager.shared.accountName(instanceId: instance.id)
+            if RaccoonOAuthManager.shared.isAuthenticated(instanceId: instance.id) {
+                return name.map { "\($0) · \(AppLocalized("Authenticated"))" } ?? AppLocalized("Authenticated")
+            }
+            return AppLocalized("Not authenticated")
         case .unsupported:
             return AppLocalized("Unsupported in this app version")
         }
@@ -1196,6 +1212,9 @@ struct ProviderInstanceDetailView: View {
         case .kimiCode: return AppLocalized("Sign in with Kimi Code")
         case .githubCopilot: return AppLocalized("Sign in with GitHub")
         case .workBuddy: return AppLocalized("Sign in with WorkBuddy")
+        case .trae: return AppLocalized("Sign in with Trae CN")
+        case .traeIntl: return AppLocalized("Sign in with Trae")
+        case .raccoon: return AppLocalized("Sign in with Raccoon")
         case .unsupported: return AppLocalized("Sign In")
         }
     }
@@ -1213,6 +1232,8 @@ struct ProviderInstanceDetailView: View {
             case .kimiCode: break // device-code flow runs in KimiDeviceLoginSheet
             case .githubCopilot: break // device-code flow runs in CopilotDeviceLoginSheet
             case .workBuddy: break // browser flow runs in WorkBuddyLoginSheet
+            case .trae, .traeIntl: break // browser flow runs in TraeLoginSheet
+            case .raccoon: break // browser flow runs in RaccoonLoginSheet
             case .unsupported: break
             }
             // [T-provider-oauth-model-discovery] Reconcile models on a
@@ -1262,6 +1283,8 @@ struct ProviderInstanceDetailView: View {
         case .kimiCode: KimiOAuthManager.shared.logout(instanceId: instance.id)
         case .githubCopilot: CopilotOAuthManager.shared.logout(instanceId: instance.id)
         case .workBuddy: WorkBuddyOAuthManager.shared.logout(instanceId: instance.id)
+        case .trae, .traeIntl: TraeOAuthManager.shared.logout(instanceId: instance.id)
+        case .raccoon: RaccoonOAuthManager.shared.logout(instanceId: instance.id)
         case .unsupported: break
         }
     }
@@ -1289,6 +1312,10 @@ struct ProviderInstanceDetailView: View {
             token = try? await CopilotOAuthManager.shared.validSessionToken(instanceId: instance.id)
         case .workBuddy:
             token = try? await WorkBuddyOAuthManager.shared.validAccessToken(instanceId: instance.id)
+        case .trae, .traeIntl:
+            token = try? await TraeOAuthManager.shared.validAccessToken(instanceId: instance.id)
+        case .raccoon:
+            token = try? await RaccoonOAuthManager.shared.validAccessToken(instanceId: instance.id)
         case .unsupported:
             token = nil
         }
@@ -1307,6 +1334,8 @@ struct ProviderInstanceDetailView: View {
         case .kimiCode: return "" // OAuth only
         case .githubCopilot: return "" // OAuth only
         case .workBuddy: return "" // OAuth only
+        case .trae, .traeIntl: return "" // OAuth only
+        case .raccoon: return "" // OAuth only
         case .antigravity: return "API Key..."
         case .openRouter: return "sk-or-..."
         case .openAIResponses: return "sk-..."

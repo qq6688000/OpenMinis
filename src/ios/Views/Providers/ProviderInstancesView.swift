@@ -418,6 +418,8 @@ private struct InstanceRow: View {
         case .kimiCode: return KimiOAuthManager.shared.isAuthenticated(instanceId: instance.id)
         case .githubCopilot: return CopilotOAuthManager.shared.isAuthenticated(instanceId: instance.id)
         case .workBuddy: return WorkBuddyOAuthManager.shared.isAuthenticated(instanceId: instance.id)
+        case .trae, .traeIntl: return TraeOAuthManager.shared.isAuthenticated(instanceId: instance.id)
+        case .raccoon: return RaccoonOAuthManager.shared.isAuthenticated(instanceId: instance.id)
         case .unsupported: return false // synced from newer build
         }
     }

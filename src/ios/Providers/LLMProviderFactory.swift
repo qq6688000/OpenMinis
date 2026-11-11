@@ -80,6 +80,10 @@ enum LLMProviderFactory {
             return openCode(makeCopilotProvider(instance: instance, model: entry.model))
         case .workBuddy:
             return openCode(makeWorkBuddyProvider(instance: instance, model: entry.model))
+        case .trae, .traeIntl:
+            return openCode(makeTraeProvider(instance: instance, model: entry.model))
+        case .raccoon:
+            return openCode(makeRaccoonProvider(instance: instance, model: entry.model))
         case .unsupported:
             throw FactoryError.voiceOnlyProvider
         }
@@ -490,6 +494,49 @@ enum LLMProviderFactory {
         provider.extraHeaders["Accept"] = "application/json"
         provider.extraHeaders["User-Agent"] = WorkBuddyOAuthManager.userAgent
         return provider
+    }
+
+    /// Raccoon：官方 OpenAI 兼容端点 `{apiBase}/api/web/llm/v2/chat/completions`。
+    /// 账号用 Bearer token + `X-Org-Code`（office_identity）认证，走
+    /// OpenAIProvider 的 oauthTokenProvider + extraHeaders，站点由
+    /// `instance.raccoonSite` 指定。
+    static func makeRaccoonProvider(instance: ProviderInstance, model: LLMModel) -> OpenAIProvider {
+        let site = instance.raccoonSite ?? .work
+        let provider: OpenAIProvider
+        if let manualToken = ProviderKeychainHelper.loadOAuthString(
+            instanceId: instance.id, account: "manual-oauth-token") {
+            provider = OpenAIProvider(apiKey: manualToken, model: model,
+                                      customBaseURL: site.chatBaseURL, appendV1Suffix: false)
+        } else {
+            let iid = instance.id
+            provider = OpenAIProvider(
+                oauthTokenProvider: { try await RaccoonOAuthManager.shared.validAccessToken(instanceId: iid) },
+                model: model
+            )
+            provider.customBaseURL = site.chatBaseURL
+            provider.appendV1Suffix = false
+        }
+        // Raccoon 账号专属头（office_identity）。
+        if let storage = ProviderKeychainHelper.loadOAuthToken(instanceId: instance.id, as: RaccoonTokenStorage.self) {
+            provider.extraHeaders["X-Org-Code"] = storage.orgCode
+            provider.extraHeaders["X-Raccoon-Language"] = "zh"
+            provider.extraHeaders["X-Client-Platform"] = site.clientPlatform
+        }
+        provider.extraHeaders["Content-Type"] = "application/json"
+        provider.extraHeaders["Accept"] = "application/json"
+        provider.extraHeaders["User-Agent"] = RaccoonOAuthManager.userAgent
+        return provider
+    }
+
+    /// Trae：官方 `llm_utils_chat` SSE 端点，非 OpenAI 格式，需自定义
+    /// `TraeProvider`。站点由 `instance.traeSite` 指定（China / Intl）。
+    static func makeTraeProvider(instance: ProviderInstance, model: LLMModel) -> TraeProvider {
+        let site = instance.traeSite ?? .china
+        return TraeProvider(
+            model: model,
+            site: site,
+            instanceId: instance.id
+        )
     }
 
     static func makeAntigravityProvider(instance: ProviderInstance, model: LLMModel) async -> AntigravityProvider {

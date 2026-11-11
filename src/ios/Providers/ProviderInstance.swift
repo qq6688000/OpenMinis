@@ -51,6 +51,11 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
     /// 仅 `.workBuddy` 实例使用；nil 时回退到 China。解码旧实例（无此字段）
     /// 为 nil，不影响其它 provider。
     var workBuddySite: WorkBuddySite?
+    /// [T-trae] Trae 站点（China 国内版 / International 国际版）。仅 `.trae`
+    /// / `.traeIntl` 实例使用；nil 时由 ProviderType 决定默认站点。
+    var traeSite: TraeSite?
+    /// [T-raccoon] Raccoon 站点（当前只有一种）。
+    var raccoonSite: RaccoonSite?
 
     init(
         id: String = UUID().uuidString,
@@ -66,7 +71,9 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
         customUserAgent: String? = nil,
         azureMode: Bool = false,
         unknownProviderTypeRaw: String? = nil,
-        workBuddySite: WorkBuddySite? = nil
+        workBuddySite: WorkBuddySite? = nil,
+        traeSite: TraeSite? = nil,
+        raccoonSite: RaccoonSite? = nil
     ) {
         self.id = id
         self.label = label
@@ -82,6 +89,8 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
         self.azureMode = azureMode
         self.unknownProviderTypeRaw = unknownProviderTypeRaw
         self.workBuddySite = workBuddySite
+        self.traeSite = traeSite
+        self.raccoonSite = raccoonSite
     }
 
     // MARK: - Codable (manual, for backwards compatibility)
@@ -89,6 +98,7 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
     enum CodingKeys: String, CodingKey {
         case id, label, providerType, credentialType, isEnabled, createdAt, customBaseURL, appendV1Suffix
         case imageEndpointMode, imageEndpointResolved, customUserAgent, azureMode, workBuddySite
+        case traeSite, raccoonSite
     }
 
     init(from decoder: Decoder) throws {
@@ -116,6 +126,8 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
         azureMode = (try? c.decodeIfPresent(Bool.self, forKey: .azureMode)) ?? false
         // [T-workbuddy] Additive + optional: old data → nil (default China).
         workBuddySite = (try? c.decodeIfPresent(WorkBuddySite.self, forKey: .workBuddySite))
+        traeSite = (try? c.decodeIfPresent(TraeSite.self, forKey: .traeSite))
+        raccoonSite = (try? c.decodeIfPresent(RaccoonSite.self, forKey: .raccoonSite))
     }
 
     func encode(to encoder: Encoder) throws {
@@ -139,6 +151,8 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
         // [T-workbuddy] Only encode when set (site selected), to keep old
         // instances byte-identical and avoid LWW noise for non-WorkBuddy types.
         if let workBuddySite { try c.encode(workBuddySite, forKey: .workBuddySite) }
+        if let traeSite { try c.encode(traeSite, forKey: .traeSite) }
+        if let raccoonSite { try c.encode(raccoonSite, forKey: .raccoonSite) }
     }
 
     /// Returns customUserAgent if non-nil and non-empty (trimmed), otherwise nil.

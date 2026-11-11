@@ -78,6 +78,8 @@ enum QuotaVendorDetector {
         // [T-workbuddy] No vendor-specific quota interface yet; treat as unknown
         // (passive, "not implemented") until a captured response confirms fields.
         case .workBuddy: return .unknown
+        case .trae, .traeIntl: return .unknown
+        case .raccoon: return .unknown
         case .unsupported: return .unknown
         }
     }

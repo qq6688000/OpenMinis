@@ -1389,6 +1389,10 @@ final class ProviderConfigStore: ObservableObject {
                 return ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: KimiTokenStorage.self).flatMap { try? JSONEncoder().encode($0) }
             case .workBuddy:
                 return ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: WorkBuddyTokenStorage.self).flatMap { try? JSONEncoder().encode($0) }
+            case .trae, .traeIntl:
+                return ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: TraeTokenStorage.self).flatMap { try? JSONEncoder().encode($0) }
+            case .raccoon:
+                return ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: RaccoonTokenStorage.self).flatMap { try? JSONEncoder().encode($0) }
             default:
                 return nil
             }
@@ -1526,6 +1530,14 @@ final class ProviderConfigStore: ObservableObject {
                 }
             case .workBuddy:
                 if let t = try? JSONDecoder().decode(WorkBuddyTokenStorage.self, from: blob) {
+                    ProviderKeychainHelper.saveOAuthToken(t, instanceId: instance.id)
+                }
+            case .trae, .traeIntl:
+                if let t = try? JSONDecoder().decode(TraeTokenStorage.self, from: blob) {
+                    ProviderKeychainHelper.saveOAuthToken(t, instanceId: instance.id)
+                }
+            case .raccoon:
+                if let t = try? JSONDecoder().decode(RaccoonTokenStorage.self, from: blob) {
                     ProviderKeychainHelper.saveOAuthToken(t, instanceId: instance.id)
                 }
             default:
@@ -3496,6 +3508,8 @@ final class ProviderConfigStore: ObservableObject {
         case .antigravity: return nil // No public base URL
         // [T-workbuddy] The site's own endpoint is the default base.
         case .workBuddy: return (instance.workBuddySite ?? .china).endpoint
+        case .trae, .traeIntl: return (instance.traeSite ?? .china).remoteBase
+        case .raccoon: return (instance.raccoonSite ?? .work).apiBase
         case .unsupported: return nil // synced from newer build
         }
     }

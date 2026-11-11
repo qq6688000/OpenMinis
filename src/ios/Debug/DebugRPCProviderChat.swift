@@ -45,6 +45,8 @@ enum DebugRPCProvider {
             case .githubCopilot: supportedCreds = ["oauth"]
             // [T-workbuddy] OAuth only — subscription login; no API-key form.
             case .workBuddy: supportedCreds = ["oauth"]
+            case .trae, .traeIntl: supportedCreds = ["oauth"]
+            case .raccoon: supportedCreds = ["oauth"]
             case .unsupported: supportedCreds = []
             }
             let customBaseSupported: Bool

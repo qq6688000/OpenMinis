@@ -94,6 +94,12 @@ enum ProviderMigration {
             case .workBuddy:
                 // [T-workbuddy] New provider; no legacy singleton tokens to migrate.
                 break
+            case .trae, .traeIntl:
+                // [T-trae] New provider; no legacy singleton tokens to migrate.
+                break
+            case .raccoon:
+                // [T-raccoon] New provider; no legacy singleton tokens to migrate.
+                break
             case .unsupported:
                 break
             }

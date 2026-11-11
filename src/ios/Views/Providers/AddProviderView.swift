@@ -1082,6 +1082,10 @@ struct AddProviderView: View {
             case .githubCopilot: break
             // [T-workbuddy] The browser flow runs in WorkBuddyLoginSheet.
             case .workBuddy: break
+            // [T-trae] The browser flow runs in TraeLoginSheet (added with the UI).
+            case .trae, .traeIntl: break
+            // [T-raccoon] The browser flow runs in RaccoonLoginSheet (added with the UI).
+            case .raccoon: break
             case .unsupported: break // free / unsupported — no OAuth
             }
             oauthAuthTime = Date()
@@ -1119,6 +1123,10 @@ struct AddProviderView: View {
             token = ProviderKeychainHelper.loadOAuthToken(instanceId: pendingInstanceId, as: CopilotTokenStorage.self)?.githubToken
         case .workBuddy:
             token = ProviderKeychainHelper.loadOAuthToken(instanceId: pendingInstanceId, as: WorkBuddyTokenStorage.self)?.accessToken
+        case .trae, .traeIntl:
+            token = ProviderKeychainHelper.loadOAuthToken(instanceId: pendingInstanceId, as: TraeTokenStorage.self)?.accessToken
+        case .raccoon:
+            token = ProviderKeychainHelper.loadOAuthToken(instanceId: pendingInstanceId, as: RaccoonTokenStorage.self)?.accessToken
         case .unsupported:
             token = nil // free / unsupported — no token
         }
@@ -1200,6 +1208,9 @@ struct AddProviderView: View {
         case .kimiCode: return AppLocalized("Sign in with Kimi Code")
         case .githubCopilot: return AppLocalized("Sign in with GitHub")
         case .workBuddy: return AppLocalized("Sign in with WorkBuddy")
+        case .trae: return AppLocalized("Sign in with Trae CN")
+        case .traeIntl: return AppLocalized("Sign in with Trae")
+        case .raccoon: return AppLocalized("Sign in with Raccoon")
         case .unsupported: return AppLocalized("Sign In")
         }
     }
@@ -1217,6 +1228,8 @@ struct AddProviderView: View {
         case .kimiCode: return "" // OAuth only
         case .githubCopilot: return "" // OAuth only
         case .workBuddy: return "" // OAuth only
+        case .trae, .traeIntl: return "" // OAuth only
+        case .raccoon: return "" // OAuth only
         case .unsupported: return ""
         }
     }
@@ -1233,6 +1246,9 @@ struct AddProviderView: View {
         case .kimiCode: return "Kimi Code"
         case .githubCopilot: return "GitHub Copilot"
         case .workBuddy: return "WorkBuddy"
+        case .trae: return "Trae"
+        case .traeIntl: return "Trae (Intl)"
+        case .raccoon: return "Raccoon"
         case .unsupported: return AppLocalized("Unsupported")
         }
     }
@@ -1266,6 +1282,10 @@ struct AddProviderView: View {
         // [T-workbuddy] WorkBuddy has no API-key form — the only credential is
         // the OAuth token from official sign-in (plus uid/domain headers).
         case .workBuddy:
+            return [.oauth]
+        case .trae, .traeIntl:
+            return [.oauth]
+        case .raccoon:
             return [.oauth]
         case .openAIResponses, .gemini:
             return [.apiKey]
@@ -1344,6 +1364,15 @@ struct AddProviderView: View {
         case .workBuddy:
             Image(systemName: "building.2.fill")
                 .foregroundStyle(.orange)
+        case .trae:
+            Image(systemName: "paperplane.fill")
+                .foregroundStyle(.indigo)
+        case .traeIntl:
+            Image(systemName: "globe")
+                .foregroundStyle(.indigo)
+        case .raccoon:
+            Image(systemName: "pawprint.fill")
+                .foregroundStyle(.pink)
         case .unsupported:
             Image(systemName: "questionmark.circle")
                 .foregroundStyle(.gray)
@@ -1362,6 +1391,9 @@ struct AddProviderView: View {
         case .kimiCode: return .indigo
         case .githubCopilot: return .primary
         case .workBuddy: return .orange
+        case .trae: return .indigo
+        case .traeIntl: return .indigo
+        case .raccoon: return .pink
         case .unsupported: return .gray
         }
     }

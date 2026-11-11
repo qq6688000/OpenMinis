@@ -32,6 +32,17 @@ enum ProviderType: String, Codable, CaseIterable, Hashable, Sendable {
     /// OpenAIProvider 的 oauthTokenProvider + extraHeaders 承载，站点由
     /// `ProviderInstance.workBuddySite` 指定（China / International）。
     case workBuddy
+    /// Trae（字节跳动 IDE）。两个变体：国内版 `.traeCN` 和国际版 `.trae`。
+    /// 聊天走官方 `llm_utils_chat` SSE 端点（非 OpenAI 格式，需自定义
+    /// TraeProvider），登录走浏览器 + JWT。站点由 `ProviderInstance.traeSite`
+    /// 指定（China / International）。
+    case trae
+    /// Trae 国际版（同 `.trae`，站点为 International）。见 `.trae` 注释。
+    case traeIntl
+    /// Raccoon（小浣熊）。官方 OpenAI 兼容端点
+    /// `{apiBase}/api/web/llm/v2/chat/completions`，Bearer token +
+    /// `X-Org-Code` 认证，登录走浏览器。走 OpenAIProvider。
+    case raccoon
     /// Sentinel for a provider type this app build doesn't recognize — e.g. a
     /// NEWER build synced an instance whose `provider_type` string isn't a known
     /// case here. We DECODE to this instead of throwing/dropping, so the instance
@@ -58,6 +69,9 @@ enum ProviderType: String, Codable, CaseIterable, Hashable, Sendable {
         case .kimiCode: return "Kimi Code"
         case .githubCopilot: return "GitHub Copilot"
         case .workBuddy: return "WorkBuddy"
+        case .trae: return "Trae"
+        case .traeIntl: return "Trae (Intl)"
+        case .raccoon: return "Raccoon"
         case .unsupported: return "Unsupported"
         }
     }
@@ -89,6 +103,12 @@ enum ProviderType: String, Codable, CaseIterable, Hashable, Sendable {
         case .workBuddy:
             // WorkBuddy 登录后可从 /v2/plugin/... 拉取真实目录；暂回退内置。
             return false
+        case .trae, .traeIntl:
+            // Trae 目录来自 `get_detail_param`（按 function 拉取）。
+            return true
+        case .raccoon:
+            // Raccoon 目录来自 `model_catalog`。
+            return true
         case .openAI:
             // OpenAIModelsAPI.fetchModelsOAuth() is a compiled-in list.
             return false
@@ -114,6 +134,8 @@ enum ProviderType: String, Codable, CaseIterable, Hashable, Sendable {
         case .xAI: return XAIModelsAPI.allModels
         case .kimiCode: return KimiModelsAPI.allModels
         case .workBuddy: return WorkBuddyModelsAPI.allModels
+        case .trae, .traeIntl: return TraeModelsAPI.allModels
+        case .raccoon: return RaccoonModelsAPI.allModels
         // Deliberately empty: the task requires the list come from the server
         // (`model_picker_enabled`), never a compiled-in guess that would go
         // stale and offer models the account cannot use.
@@ -144,6 +166,12 @@ enum ProviderType: String, Codable, CaseIterable, Hashable, Sendable {
             return AppLocalized("Sign in with GitHub — unofficial, use at your own risk")
         case .workBuddy:
             return AppLocalized("Sign in with your WorkBuddy / WorkBuddy AI subscription")
+        case .trae:
+            return AppLocalized("Sign in with your Trae CN account in the browser.")
+        case .traeIntl:
+            return AppLocalized("Sign in with your Trae account in the browser.")
+        case .raccoon:
+            return AppLocalized("Sign in with your Raccoon account in the browser.")
         case .antigravity:
             return AppLocalized("\(builtInModels.count) built-in models")
         case .unsupported:
@@ -164,6 +192,8 @@ enum ProviderType: String, Codable, CaseIterable, Hashable, Sendable {
         case .kimiCode: return .vision
         case .githubCopilot: return .vision
         case .workBuddy: return .vision
+        case .trae, .traeIntl: return .vision
+        case .raccoon: return .vision
         case .unsupported: return .vision
         }
     }
@@ -226,6 +256,62 @@ enum WorkBuddySite: String, Codable, CaseIterable, Hashable, Sendable {
     }
 }
 
+/// [T-trae] Trae 站点（字节跳动 IDE）。
+enum TraeSite: String, Codable, CaseIterable, Hashable, Sendable {
+    case china = "china"
+    case international = "international"
+
+    var displayName: String {
+        switch self {
+        case .china: return "Trae CN"
+        case .international: return "Trae"
+        }
+    }
+
+    /// 远程会话门（agent/IDE 端点挂在其 origin 下，非 `/api/remote/v1`）。
+    var remoteBase: String {
+        switch self {
+        case .china: return "https://trae-api-cn.mchost.guru/api/remote/v1"
+        case .international: return "https://core-normal.trae.ai/api/remote/v1"
+        }
+    }
+
+    /// 登录 ExchangeToken 的 host（国际版可能由账号指定其它 host）。
+    var oauthHost: String {
+        switch self {
+        case .china: return "https://api.trae.cn"
+        case .international: return "https://core-normal.trae.ai"
+        }
+    }
+
+    var host: String { URL(string: remoteBase)?.host ?? "" }
+
+    static func fromRaw(_ raw: String?) -> TraeSite {
+        raw.flatMap(TraeSite.init(rawValue:)) ?? .china
+    }
+}
+
+/// [T-raccoon] Raccoon 站点。
+enum RaccoonSite: String, Codable, CaseIterable, Hashable, Sendable {
+    case work = "work"
+
+    var displayName: String { "Raccoon" }
+
+    var apiBase: String { "https://xiaohuanxiong.com" }
+    var llmPrefix: String { "/api/web/llm/v2" }
+    var authPrefix: String { "/api/web/auth/v1" }
+    var clientPlatform: String { "desktop-windows" }
+
+    /// 聊天 API：`{apiBase}/api/web/llm/v2/chat/completions`（OpenAI 兼容）。
+    var chatBaseURL: String { apiBase + llmPrefix }
+
+    var host: String { URL(string: apiBase)?.host ?? "" }
+
+    static func fromRaw(_ raw: String?) -> RaccoonSite {
+        raw.flatMap(RaccoonSite.init(rawValue:)) ?? .work
+    }
+}
+
 /// WorkBuddy 账号凭据，按实例存 Keychain（`ProviderKeychainHelper`）。
 struct WorkBuddyTokenStorage: Codable, Equatable {
     var accessToken: String
@@ -273,6 +359,80 @@ enum WorkBuddyModelsAPI {
         // 未来可查 WorkBuddy 的模型目录；目前回退内置清单。
         allModels
     }
+}
+
+/// [T-trae] Trae 内置模型目录（回退；登录后从 `get_detail_param` 拉真实目录）。
+enum TraeModelsAPI {
+    static let defaultModelId = "glm-5.2"
+
+    static let allModels: [LLMModel] = [
+        LLMModel(id: "glm-5.3", displayName: "GLM 5.3", provider: "Trae"),
+        LLMModel(id: "glm-5.2", displayName: "GLM 5.2", provider: "Trae"),
+        LLMModel(id: "DeepSeek-V4-Pro-Official", displayName: "DeepSeek V4 Pro", provider: "Trae"),
+        LLMModel(id: "DeepSeek-V4-Flash-Official", displayName: "DeepSeek V4 Flash", provider: "Trae"),
+        LLMModel(id: "Doubao-Seed-2.1-Pro", displayName: "Doubao Seed 2.1 Pro", provider: "Trae"),
+        LLMModel(id: "Doubao-Seed-2.1-Turbo", displayName: "Doubao Seed 2.1 Turbo", provider: "Trae"),
+        LLMModel(id: "Doubao-Seed-Evolving", displayName: "Doubao Seed Evolving", provider: "Trae"),
+        LLMModel(id: "kimi-k3", displayName: "Kimi K3", provider: "Trae"),
+        LLMModel(id: "minimax-m3", displayName: "MiniMax M3", provider: "Trae"),
+        LLMModel(id: "qwen-3.7-plus", displayName: "Qwen 3.7 Plus", provider: "Trae"),
+        LLMModel(id: "qwen3.8-max", displayName: "Qwen 3.8 Max", provider: "Trae"),
+    ]
+
+    /// 登录后从 Trae 目录拉取（`get_detail_param`）；失败回退内置。
+    static func fetchModels(accessToken: String, site: TraeSite) async -> [LLMModel] {
+        // 完整实现见 TraeModelsFetcher（后续）；目前回退内置清单。
+        allModels
+    }
+}
+
+/// [T-raccoon] Raccoon 内置模型目录（回退；登录后从 `model_catalog` 拉真实目录）。
+enum RaccoonModelsAPI {
+    static let defaultModelId = "auto"
+
+    static let allModels: [LLMModel] = [
+        LLMModel(id: "auto", displayName: "Auto", provider: "Raccoon"),
+        LLMModel(id: "deepseek-v4.1-flash", displayName: "Deepseek V4.1 Flash", provider: "Raccoon"),
+        LLMModel(id: "deepseek-v4-pro", displayName: "Deepseek V4 Pro", provider: "Raccoon"),
+        LLMModel(id: "glm-5.3", displayName: "GLM 5.3", provider: "Raccoon"),
+        LLMModel(id: "glm-5.2", displayName: "GLM 5.2", provider: "Raccoon"),
+        LLMModel(id: "minimax-m3", displayName: "MiniMax M3", provider: "Raccoon"),
+        LLMModel(id: "kimi-k3", displayName: "Kimi K3", provider: "Raccoon"),
+        LLMModel(id: "qwen-3.7-plus", displayName: "Qwen 3.7 Plus", provider: "Raccoon"),
+    ]
+
+    /// 登录后从 Raccoon 目录拉取（`model_catalog`）；失败回退内置。
+    static func fetchModels(accessToken: String, orgCode: String, site: RaccoonSite) async -> [LLMModel] {
+        // 完整实现见 RaccoonModelsFetcher（后续）；目前回退内置清单。
+        allModels
+    }
+}
+
+/// [T-raccoon] Raccoon 账号凭据，按实例存 Keychain。
+struct RaccoonTokenStorage: Codable, Equatable {
+    var accessToken: String
+    var refreshToken: String
+    var expireDate: Date?
+    var orgCode: String
+    var orgName: String
+    var orgRole: String
+    var accountName: String
+    var site: String
+    var lastRefresh: Date
+}
+
+/// [T-trae] Trae 账号凭据，按实例存 Keychain。
+struct TraeTokenStorage: Codable, Equatable {
+    var accessToken: String
+    var refreshToken: String
+    var expireDate: Date?
+    var userID: String
+    var machineID: String?
+    var deviceID: String?
+    var oauthHost: String?
+    var accountName: String
+    var site: String
+    var lastRefresh: Date
 }
 
 

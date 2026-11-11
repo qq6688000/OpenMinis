@@ -198,6 +198,12 @@ enum BackupSecretsCollector {
         case .workBuddy:
             return ProviderKeychainHelper.loadOAuthToken(instanceId: id, as: WorkBuddyTokenStorage.self)
                 .flatMap { try? JSONEncoder().encode($0) }
+        case .trae, .traeIntl:
+            return ProviderKeychainHelper.loadOAuthToken(instanceId: id, as: TraeTokenStorage.self)
+                .flatMap { try? JSONEncoder().encode($0) }
+        case .raccoon:
+            return ProviderKeychainHelper.loadOAuthToken(instanceId: id, as: RaccoonTokenStorage.self)
+                .flatMap { try? JSONEncoder().encode($0) }
         case .antigravity, .openAIResponses, .openRouter, .unsupported:
             return nil
         }
