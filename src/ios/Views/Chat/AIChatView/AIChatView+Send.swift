@@ -300,46 +300,43 @@ extension AIChatView {
     private func watchForErrorAndSwitch(useRowText: Bool) {
         Task { [weak vm] in
             guard let vm = vm else { return }
-            var switched = false
-            // Poll for the whole turn. A 404/rate-limit can surface right at the
-            // end, so we keep watching until isProcessing flips false, then do a
-            // final check before giving up.
-            // [T-late-error-grace] Once isProcessing flips false, DON'T exit
-            // immediately: the failure banner (e.g. "额度已用完") can land on the
-            // assistant row a beat AFTER the stream closes, so we keep polling for
-            // a short grace window to catch it. Only then do we make the final
-            // decision.
-            var gracePollsLeft = 40   // 40 * 250ms = 10s grace after turn end
-            for _ in 0..<1200 {
-                try? await Task.sleep(nanoseconds: 250_000_000)
-                if Task.isCancelled { return }
-                let err = self.currentErrorText(vm: vm, useRowText: useRowText)
-                if err == nil {
+            // [T-any-error-switch] Keep switching on ANY red-banner error until a
+            // model answers or we run out of candidates. Each failure switches to
+            // the next model and retries, so a quota-exhausted model falls through
+            // to the next one automatically — no keyword matching needed.
+            let maxSwitches = 3
+            var switchCount = 0
+            while switchCount < maxSwitches {
+                var gracePollsLeft = 40   // 40 * 250ms = 10s grace after turn end
+                var err: String? = nil
+                for _ in 0..<1200 {
+                    try? await Task.sleep(nanoseconds: 250_000_000)
+                    if Task.isCancelled { return }
+                    err = self.currentErrorText(vm: vm, useRowText: useRowText)
+                    if err != nil { break }
                     if !vm.isProcessing {
                         if gracePollsLeft > 0 { gracePollsLeft -= 1; continue }
-                        return   // turn over, no error after grace window
+                        return   // turn over cleanly, no error → done
                     }
-                    continue
                 }
-                guard !switched,
+                guard let theError = err,
                       ChatOptimizer.shared.autoSwitchUnavailableEnabled,
                       let sid = vm.sessionId, !sid.isEmpty else { return }
-                AppLogger(category: "ChatOptimizer").warning("[autoSwitch] error: \(err!.prefix(120)) — switching model and retrying")
+
+                AppLogger(category: "ChatOptimizer").warning("[autoSwitch] error: \(theError.prefix(120)) — switching model and retrying")
                 let switchedModel = ChatOptimizer.shared.switchToNextAvailable(sessionId: sid)
-                if switchedModel {
-                    switched = true
-                }
                 vm.errorMessage = nil
                 // Clear the error on the assistant row that actually holds it
                 // (messages.last can be a queued user row).
-                if let idx = vm.messages.lastIndex(where: { $0.role == .assistant }) {
+                for idx in vm.messages.indices where vm.messages[idx].role == .assistant {
                     vm.messages[idx].error = nil
                 }
                 if !switchedModel {
                     // No other model to switch to — retry the CURRENT model once
-                    // (the quota error may be transient), but don't loop forever.
+                    // (the error may be transient), then stop.
                     AppLogger(category: "ChatOptimizer").warning("[autoSwitch] no replacement available; retrying current model once")
                 }
+                switchCount += 1
                 // vm.retry() early-returns while isProcessing is true, so wait
                 // for the failed turn to fully settle before re-sending.
                 for _ in 0..<40 {
@@ -348,23 +345,31 @@ extension AIChatView {
                     if Task.isCancelled { return }
                 }
                 vm.retry()
-                return
+                // Loop again to watch the retried turn for a further failure.
             }
         }
     }
 
-    /// Unified error-source reader: vm.errorMessage, the LAST ASSISTANT row's
-    /// `error` field, and (when useRowText) that row's block text via
-    /// `looksLikeError`. The assistant row is resolved with
-    /// `last(where: role == .assistant)` because `messages.last` can be a queued
-    /// user row appended mid-tool (the same reason the error epilogue writes to
-    /// that row, not to `messages.last`).
+    /// Unified error-source reader: vm.errorMessage, then the LAST ASSISTANT
+    /// row's `error` field. [T-any-error-switch] The red banner is the ONLY
+    /// authority: `reportTurnFailure` sets `carrier.error` (and clears it only
+    /// on a successful follow-up), so a non-nil `error` means the turn failed —
+    /// we switch models on ANY such error, no keyword matching. The assistant
+    /// row is resolved with `last(where: role == .assistant)` because
+    /// `messages.last` can be a queued user row appended mid-tool.
     private func currentErrorText(vm: AIChatViewModel, useRowText: Bool) -> String? {
         if let e = vm.errorMessage, !e.isEmpty { return e }
         let lastAssistant = vm.messages.last(where: { $0.role == .assistant })
         if let err = lastAssistant?.error, !err.isEmpty { return err }
-        if useRowText, Self.looksLikeError(lastAssistant) {
-            return "assistant row error"
+        // Fallback: the error may live in the row's text block (some provider
+        // paths write "Provider error: ..." into the assistant text instead of
+        // the error field). Only treat it as an error if the row ALSO ended the
+        // turn with no streaming content — i.e. it really is a failure row, not
+        // a healthy reply.
+        if useRowText, let last = lastAssistant,
+           last.blocks.contains(where: { if case .text = $0.kind { return true }; return false }),
+           last.error == nil {
+            return Self.looksLikeError(last) ? "assistant row error" : nil
         }
         return nil
     }
