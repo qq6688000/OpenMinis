@@ -290,6 +290,8 @@ struct UnifiedModelPicker: View {
     /// [T-optimize-prompt] Bumped when a background speed test finishes so the
     /// rows repaint their latency badges (UserDefaults reads are synchronous).
     @State private var latencyTick: Int = 0
+    /// [T-quick-speedtest] Whether a manual "speed test all" is in flight.
+    @State private var speedTestingAll: Bool = false
 
     /// [T-picker-provider-edit] Identifiable wrapper so `.sheet(item:)` can drive
     /// the provider detail page.
@@ -884,6 +886,25 @@ struct UnifiedModelPicker: View {
                 .disabled(selectedEntryIds.isEmpty)
             }
         } else {
+            // [T-quick-speedtest] Manual "speed test all models" button (top-left).
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    Task { @MainActor in
+                        speedTestingAll = true
+                        let sid = config.currentSessionId?()
+                        await ChatOptimizer.shared.speedTestAll(sessionId: sid)
+                        speedTestingAll = false
+                    }
+                } label: {
+                    if speedTestingAll {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Image(systemName: "speedometer")
+                    }
+                }
+                .disabled(speedTestingAll)
+                .accessibilityLabel(Text("测速所有模型"))
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Done") { dismiss() }
             }

@@ -90,13 +90,20 @@ final class ChatOptimizer {
             // request-build time — exactly like the live conversation path. This
             // avoids the OpenCode 400 that the old `sessionId: nil` snapshot hit.
             let provider = try await LLMProviderFactory.makeProvider(for: entry, resolveSessionId: { sessionId })
-            let resp = try await provider.sendMessage(
+            // [T-optimize-stream] Some providers (WorkBuddy etc.) reject non-stream
+            // requests with HTTP 400 "Non-stream chat request is not supported", so
+            // we ALWAYS use the streaming path and concatenate the deltas.
+            let stream = try await provider.streamMessage(
                 messages: messages,
                 systemPrompt: system,
                 maxTokens: 1024,
                 temperature: 0.2
             )
-            let out = resp.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            var acc = ""
+            for try await chunk in stream {
+                if case .text(let delta) = chunk { acc += delta }
+            }
+            let out = acc.trimmingCharacters(in: .whitespacesAndNewlines)
             return out.isEmpty ? trimmed : out
         } catch {
             AppLogger(category: "ChatOptimizer").warning("[optimize] rewrite failed: \(error.localizedDescription)")
@@ -190,8 +197,12 @@ final class ChatOptimizer {
             pump()
             for await (id, lat) in group {
                 inFlight -= 1
-                if let lat = lat { updated.entries[id] = lat }
-                else { if !updated.unavailable.contains(id) { updated.unavailable.append(id) } }
+                if let lat = lat {
+                    updated.entries[id] = lat
+                    updated.unavailable.removeAll { $0 == id }   // recovered
+                } else if !updated.unavailable.contains(id) {
+                    updated.unavailable.append(id)
+                }
                 pump()
             }
         }
