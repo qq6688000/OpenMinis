@@ -266,11 +266,14 @@ extension AIChatView {
         // [T-auto-switch-markers] Cover every provider error wording, including
         // rate limiting ("Rate limited — please try again later" has no
         // "Provider error" prefix) and the various 404 model-missing phrasings.
+        // Also inspect the row's `error` field — the "额度已用完" banner lands
+        // there, not in a text block.
+        let text = joined + " " + (message.error ?? "")
         let markers = ["Provider error", "[404]", "Rate limited", "rate limit",
                        "模型不存在", "未启用", "not found", "not enabled",
                        "does not exist", "model is not", "Service temporarily unavailable",
-                       "Invalid API key"]
-        return markers.contains { joined.contains($0) }
+                       "Invalid API key", "额度已用完", "quota", "quota exceeded"]
+        return markers.contains { text.contains($0) }
     }
 
     /// [T-auto-switch-on-error] Poll `vm.errorMessage` right after a send; the
@@ -301,37 +304,50 @@ extension AIChatView {
             // Poll for the whole turn. A 404/rate-limit can surface right at the
             // end, so we keep watching until isProcessing flips false, then do a
             // final check before giving up.
+            // [T-late-error-grace] Once isProcessing flips false, DON'T exit
+            // immediately: the failure banner (e.g. "额度已用完") can land on the
+            // assistant row a beat AFTER the stream closes, so we keep polling for
+            // a short grace window to catch it. Only then do we make the final
+            // decision.
+            var gracePollsLeft = 40   // 40 * 250ms = 10s grace after turn end
             for _ in 0..<1200 {
                 try? await Task.sleep(nanoseconds: 250_000_000)
                 if Task.isCancelled { return }
                 let err = self.currentErrorText(vm: vm, useRowText: useRowText)
                 if err == nil {
-                    // Still processing (or clean) — keep watching unless the turn
-                    // is over with no error.
-                    if !vm.isProcessing { return }
+                    if !vm.isProcessing {
+                        if gracePollsLeft > 0 { gracePollsLeft -= 1; continue }
+                        return   // turn over, no error after grace window
+                    }
                     continue
                 }
                 guard !switched,
                       ChatOptimizer.shared.autoSwitchUnavailableEnabled,
                       let sid = vm.sessionId, !sid.isEmpty else { return }
                 AppLogger(category: "ChatOptimizer").warning("[autoSwitch] error: \(err!.prefix(120)) — switching model and retrying")
-                if ChatOptimizer.shared.switchToNextAvailable(sessionId: sid) {
+                let switchedModel = ChatOptimizer.shared.switchToNextAvailable(sessionId: sid)
+                if switchedModel {
                     switched = true
-                    vm.errorMessage = nil
-                    // Clear the error on the assistant row that actually holds it
-                    // (messages.last can be a queued user row).
-                    if let idx = vm.messages.lastIndex(where: { $0.role == .assistant }) {
-                        vm.messages[idx].error = nil
-                    }
-                    // vm.retry() early-returns while isProcessing is true, so wait
-                    // for the failed turn to fully settle before re-sending.
-                    for _ in 0..<40 {
-                        if !vm.isProcessing { break }
-                        try? await Task.sleep(nanoseconds: 250_000_000)
-                        if Task.isCancelled { return }
-                    }
-                    vm.retry()
                 }
+                vm.errorMessage = nil
+                // Clear the error on the assistant row that actually holds it
+                // (messages.last can be a queued user row).
+                if let idx = vm.messages.lastIndex(where: { $0.role == .assistant }) {
+                    vm.messages[idx].error = nil
+                }
+                if !switchedModel {
+                    // No other model to switch to — retry the CURRENT model once
+                    // (the quota error may be transient), but don't loop forever.
+                    AppLogger(category: "ChatOptimizer").warning("[autoSwitch] no replacement available; retrying current model once")
+                }
+                // vm.retry() early-returns while isProcessing is true, so wait
+                // for the failed turn to fully settle before re-sending.
+                for _ in 0..<40 {
+                    if !vm.isProcessing { break }
+                    try? await Task.sleep(nanoseconds: 250_000_000)
+                    if Task.isCancelled { return }
+                }
+                vm.retry()
                 return
             }
         }

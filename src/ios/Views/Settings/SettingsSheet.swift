@@ -47,7 +47,7 @@ struct SettingsSheet: View {
     @State private var showFeedbackDialog = false
     // [T-optimize-prompt] Chat auto-helper switches.
     @AppStorage("chatOptimizer.autoPickFastest") private var autoPickFastest = false
-    @AppStorage("chatOptimizer.autoSwitchUnavailable") private var autoSwitchUnavailable = false
+    @AppStorage("chatOptimizer.autoSwitchUnavailable") private var autoSwitchUnavailable = true
     @AppStorage("chatOptimizer.autoRetryOnTimeout") private var autoRetryOnTimeout = false
 
     var body: some View {

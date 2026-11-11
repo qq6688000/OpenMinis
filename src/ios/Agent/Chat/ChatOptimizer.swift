@@ -347,8 +347,14 @@ final class ChatOptimizer {
     }
 
     /// Whether `autoSwitchUnavailable` is enabled (AppStorage-backed UserDefaults).
+    /// [T-auto-switch-default-on] Default TRUE: if the user has never touched the
+    /// setting, auto-switch on provider error should be on. `bool(forKey:)`
+    /// returns false when unset, so explicitly treat "unset" as enabled.
     var autoSwitchUnavailableEnabled: Bool {
-        UserDefaults.standard.bool(forKey: ChatOptimizerSettings.autoSwitchUnavailable)
+        if UserDefaults.standard.object(forKey: ChatOptimizerSettings.autoSwitchUnavailable) == nil {
+            return true   // unset → default ON
+        }
+        return UserDefaults.standard.bool(forKey: ChatOptimizerSettings.autoSwitchUnavailable)
     }
 
     /// Apply the auto-pick-fastest and auto-switch-unavailable rules before a
