@@ -41,6 +41,31 @@ final class RaccoonOAuthManager: ObservableObject {
         ProviderKeychainHelper.deleteOAuthToken(instanceId: instanceId)
     }
 
+    // MARK: - Browser sign-in
+
+    /// Runs the Raccoon browser-loopback sign-in and stores the tokens.
+    func login(
+        instanceId: String,
+        present: @escaping (URL) -> Void
+    ) async throws {
+        let result = try await RaccoonOAuthLogin.login { url in
+            present(url)
+        }
+        let storage = RaccoonTokenStorage(
+            accessToken: result.access,
+            refreshToken: result.refresh,
+            expireDate: result.expireAt,
+            orgCode: result.orgCode,
+            orgName: result.orgName,
+            orgRole: result.orgRole,
+            accountName: result.orgName.isEmpty ? "Raccoon" : result.orgName,
+            site: RaccoonSite.work.rawValue,
+            lastRefresh: Date()
+        )
+        ProviderKeychainHelper.saveOAuthToken(storage, instanceId: instanceId)
+        logger.info("Raccoon login OK (instance: \(instanceId), org: \(result.orgCode))")
+    }
+
     // MARK: - Access token (single-flight refresh)
 
     func validAccessToken(instanceId: String) async throws -> String {

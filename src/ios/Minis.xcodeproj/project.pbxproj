@@ -569,6 +569,10 @@
 		ETRAE0003 /* TraeAgentProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = ETRAE0004 /* TraeAgentProvider.swift */; };
 		ETRAE0005 /* TraeOAuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = ETRAE0006 /* TraeOAuthManager.swift */; };
 		ERACC0001 /* RaccoonOAuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = ERACC0002 /* RaccoonOAuthManager.swift */; };
+		ERACC0003 /* RaccoonOAuthLogin.swift in Sources */ = {isa = PBXBuildFile; fileRef = ERACC0004 /* RaccoonOAuthLogin.swift */; };
+		ERACC0005 /* RaccoonLoginSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = ERACC0006 /* RaccoonLoginSheet.swift */; };
+		ETRAE0009 /* TraeOAuthLogin.swift in Sources */ = {isa = PBXBuildFile; fileRef = ETRAE000A /* TraeOAuthLogin.swift */; };
+		ETRAE000B /* TraeLoginSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = ETRAE000C /* TraeLoginSheet.swift */; };
 		E6A000002 /* AntigravityModelsAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6A000012 /* AntigravityModelsAPI.swift */; };
 		E6A000003 /* AntigravityOAuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6A000013 /* AntigravityOAuthManager.swift */; };
 		E6A000004 /* AntigravityAgentProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6A000014 /* AntigravityAgentProvider.swift */; };
@@ -1388,6 +1392,10 @@
 		ETRAE0004 /* TraeAgentProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TraeAgentProvider.swift; path = Providers/Trae/TraeAgentProvider.swift; sourceTree = SOURCE_ROOT; };
 		ETRAE0006 /* TraeOAuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TraeOAuthManager.swift; path = Providers/Trae/TraeOAuthManager.swift; sourceTree = SOURCE_ROOT; };
 		ERACC0002 /* RaccoonOAuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RaccoonOAuthManager.swift; path = Providers/Raccoon/RaccoonOAuthManager.swift; sourceTree = SOURCE_ROOT; };
+		ERACC0004 /* RaccoonOAuthLogin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RaccoonOAuthLogin.swift; path = Providers/Raccoon/RaccoonOAuthLogin.swift; sourceTree = SOURCE_ROOT; };
+		ERACC0006 /* RaccoonLoginSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RaccoonLoginSheet.swift; path = Views/Providers/RaccoonLoginSheet.swift; sourceTree = SOURCE_ROOT; };
+		ETRAE000A /* TraeOAuthLogin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TraeOAuthLogin.swift; path = Providers/Trae/TraeOAuthLogin.swift; sourceTree = SOURCE_ROOT; };
+		ETRAE000C /* TraeLoginSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TraeLoginSheet.swift; path = Views/Providers/TraeLoginSheet.swift; sourceTree = SOURCE_ROOT; };
 		E6A000012 /* AntigravityModelsAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AntigravityModelsAPI.swift; sourceTree = "<group>"; };
 		E6A000013 /* AntigravityOAuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AntigravityOAuthManager.swift; sourceTree = "<group>"; };
 		E6A000014 /* AntigravityAgentProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AntigravityAgentProvider.swift; sourceTree = "<group>"; };
@@ -1794,6 +1802,10 @@
 				ETRAE0004 /* TraeAgentProvider.swift */,
 				ETRAE0006 /* TraeOAuthManager.swift */,
 				ERACC0002 /* RaccoonOAuthManager.swift */,
+				ERACC0004 /* RaccoonOAuthLogin.swift */,
+				ETRAE000A /* TraeOAuthLogin.swift */,
+				ETRAE000C /* TraeLoginSheet.swift */,
+				ERACC0006 /* RaccoonLoginSheet.swift */,
 				E5C000030 /* OpenAI */,
 				E7A000030 /* OpenRouter */,
 				EXA000030 /* xAI */,
@@ -3410,6 +3422,10 @@
 				ETRAE0003 /* TraeAgentProvider.swift in Sources */,
 				ETRAE0005 /* TraeOAuthManager.swift in Sources */,
 				ERACC0001 /* RaccoonOAuthManager.swift in Sources */,
+				ERACC0003 /* RaccoonOAuthLogin.swift in Sources */,
+				ERACC0005 /* RaccoonLoginSheet.swift in Sources */,
+				ETRAE0009 /* TraeOAuthLogin.swift in Sources */,
+				ETRAE000B /* TraeLoginSheet.swift in Sources */,
 				E6A000002 /* AntigravityModelsAPI.swift in Sources */,
 				E6A000003 /* AntigravityOAuthManager.swift in Sources */,
 				E6A000004 /* AntigravityAgentProvider.swift in Sources */,

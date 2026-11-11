@@ -47,6 +47,41 @@ final class TraeOAuthManager: ObservableObject {
         ProviderKeychainHelper.deleteOAuthToken(instanceId: instanceId)
     }
 
+    // MARK: - Login (PKCE loopback)
+
+    struct LoginPresentation {
+        let authURL: URL
+        let site: TraeSite
+    }
+
+    /// Runs the browser sign-in: builds the authorization URL, calls `present`
+    /// so the UI can open the browser, waits for the loopback callback, then
+    /// exchanges the code for a token and stores it.
+    func login(
+        instanceId: String,
+        site: TraeSite,
+        present: @escaping (LoginPresentation) -> Void
+    ) async throws {
+        let profile = TraeLoginProfile.of(site)
+        let result = try await TraeOAuthClient.login(profile: profile) { url in
+            present(LoginPresentation(authURL: url, site: site))
+        }
+        let storage = TraeTokenStorage(
+            accessToken: result.access,
+            refreshToken: result.refresh,
+            expireDate: result.expireAt,
+            userID: result.userID,
+            machineID: result.machineID,
+            deviceID: result.deviceID,
+            oauthHost: result.origin,
+            accountName: result.userID.isEmpty ? "Trae" : result.userID,
+            site: site.rawValue,
+            lastRefresh: Date()
+        )
+        ProviderKeychainHelper.saveOAuthToken(storage, instanceId: instanceId)
+        logger.info("Trae login OK (instance: \(instanceId), site: \(site.rawValue), user: \(result.userID))")
+    }
+
     // MARK: - Access token (single-flight refresh)
 
     func validAccessToken(instanceId: String) async throws -> String {

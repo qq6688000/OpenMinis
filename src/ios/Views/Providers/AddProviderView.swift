@@ -179,6 +179,9 @@ struct AddProviderView: View {
     @State private var showKimiLogin = false
     /// [T-copilot-provider] Same device-code shape as Kimi's.
     @State private var showCopilotLogin = false
+    @State private var showTraeLogin = false
+    @State private var showRaccoonLogin = false
+    @State private var selectedTraeSite: TraeSite = .china
     @State private var oauthAuthTime: Date?
     @State private var showDataSharingConsent = false
     @State private var showImportFile = false
@@ -359,6 +362,24 @@ struct AddProviderView: View {
                 if success {
                     oauthAuthTime = Date()
                     oauthMaskedToken = loadMaskedToken(type: .githubCopilot)
+                    pendingOAuthDone = true
+                }
+            }
+        }
+        .sheet(isPresented: $showTraeLogin) {
+            TraeLoginSheet(instanceId: pendingInstanceId, initialSite: selectedTraeSite) { success in
+                if success {
+                    oauthAuthTime = Date()
+                    oauthMaskedToken = loadMaskedToken(type: selectedType ?? .trae)
+                    pendingOAuthDone = true
+                }
+            }
+        }
+        .sheet(isPresented: $showRaccoonLogin) {
+            RaccoonLoginSheet(instanceId: pendingInstanceId) { success in
+                if success {
+                    oauthAuthTime = Date()
+                    oauthMaskedToken = loadMaskedToken(type: .raccoon)
                     pendingOAuthDone = true
                 }
             }
@@ -1082,10 +1103,20 @@ struct AddProviderView: View {
             case .githubCopilot: break
             // [T-workbuddy] The browser flow runs in WorkBuddyLoginSheet.
             case .workBuddy: break
-            // [T-trae] The browser flow runs in TraeLoginSheet (added with the UI).
-            case .trae, .traeIntl: break
-            // [T-raccoon] The browser flow runs in RaccoonLoginSheet (added with the UI).
-            case .raccoon: break
+            // [T-trae] Browser flow runs in TraeLoginSheet. Set the site by
+            // which build we're on, then return so we don't fake success.
+            case .trae:
+                selectedTraeSite = .china
+                showTraeLogin = true
+                return
+            case .traeIntl:
+                selectedTraeSite = .international
+                showTraeLogin = true
+                return
+            // [T-raccoon] Browser flow runs in RaccoonLoginSheet.
+            case .raccoon:
+                showRaccoonLogin = true
+                return
             case .unsupported: break // free / unsupported — no OAuth
             }
             oauthAuthTime = Date()

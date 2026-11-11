@@ -13,6 +13,10 @@ struct ProviderInstanceDetailView: View {
     @State private var showCopilotLogin = false
     /// [T-workbuddy] Browser sign-in sheet for WorkBuddy subscription.
     @State private var showWorkBuddyLogin = false
+    /// [T-trae] Browser sign-in sheet for Trae (CN/Intl).
+    @State private var showTraeLogin = false
+    /// [T-raccoon] Browser sign-in sheet for Raccoon.
+    @State private var showRaccoonLogin = false
     @State private var keyInputText = ""
     @State private var isFetchingModels = false
     /// [T-thinking-rules-ui-fix] Owned HERE, not inside ThinkingRulesSection: a .sheet on a
@@ -120,6 +124,26 @@ struct ProviderInstanceDetailView: View {
         .sheet(isPresented: $showWorkBuddyLogin) {
             if let instance = instance {
                 WorkBuddyLoginSheet(instanceId: instance.id, initialSite: instance.workBuddySite ?? .china) { success in
+                    oauthRefreshTrigger.toggle()
+                    if success {
+                        Task { await store.refreshModels(for: instance) }
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showTraeLogin) {
+            if let instance = instance {
+                TraeLoginSheet(instanceId: instance.id, initialSite: instance.providerType == .traeIntl ? .international : .china) { success in
+                    oauthRefreshTrigger.toggle()
+                    if success {
+                        Task { await store.refreshModels(for: instance) }
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showRaccoonLogin) {
+            if let instance = instance {
+                RaccoonLoginSheet(instanceId: instance.id) { success in
                     oauthRefreshTrigger.toggle()
                     if success {
                         Task { await store.refreshModels(for: instance) }
@@ -644,6 +668,10 @@ struct ProviderInstanceDetailView: View {
             showCopilotLogin = true
         } else if instance.providerType == .workBuddy {
             showWorkBuddyLogin = true
+        } else if instance.providerType == .trae || instance.providerType == .traeIntl {
+            showTraeLogin = true
+        } else if instance.providerType == .raccoon {
+            showRaccoonLogin = true
         } else {
             Task {
                 await oauthLogin(instance)
