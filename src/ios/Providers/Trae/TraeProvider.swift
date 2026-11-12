@@ -67,6 +67,10 @@ final class TraeProvider: LLMProvider {
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
         request.setValue("Cloud-IDE-JWT \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("Trae/0.1.61", forHTTPHeaderField: "User-Agent")
+        // These three version values are one set: the gate matches its
+        // configuration table against them together.
+        request.setValue("0.1.61", forHTTPHeaderField: "x-ide-version")
+        request.setValue("20260820", forHTTPHeaderField: "x-ide-version-code")
         if let uid = await TraeOAuthManager.shared.userID(instanceId: instanceId) {
             request.setValue(uid, forHTTPHeaderField: "X-Uid")
         }
@@ -131,17 +135,16 @@ final class TraeProvider: LLMProvider {
         }
         var body: [String: Any] = [
             "app_id": "6eefa01c-1036-4c7e-9ca5-d891f63bfcd8",
-            "app_version_code": 34,
-            "function": "solo_work_lite",
+            "app_version_code": 20260820,
+            // `solo_work_remote` carries every user-selectable model; asking
+            // through `solo_work_lite` answers `4001 param is invalid` for
+            // models like glm-5.3 that only the remote roster publishes.
+            "function": "solo_work_remote",
             "model": model,
             "config_name": model,
             "stream": true,
             "messages": msgs,
-            "max_tokens": maxTokens,
         ]
-        if let temperature {
-            body["temperature"] = temperature
-        }
         return body
     }
 
