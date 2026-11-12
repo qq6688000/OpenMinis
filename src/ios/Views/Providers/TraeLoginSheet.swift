@@ -1,10 +1,14 @@
+import SafariServices
 import SwiftUI
-import WebKit
 
-/// In-app browser sign-in sheet for Trae (both builds). Uses a WKWebView
-/// instead of SFSafariViewController + loopback listener: the WebView shows
-/// the authorization page inside the app, and its navigation delegate
-/// intercepts the loopback callback URL before any real request is made.
+/// Browser sign-in sheet for Trae (both builds).
+///
+/// Opens Trae's authorization page in `SFSafariViewController` — a real Safari
+/// session inside the app, so the page's scripts and network behave normally
+/// (an embedded WKWebView made the page fail with its own "network error" and
+/// then hang on "认证中"). The page redirects to `http://127.0.0.1:<port>/authorize`,
+/// which `TraeLoopback` (an in-app HTTP listener) answers. Same shape as
+/// Apelin's implementation.
 struct TraeLoginSheet: View {
     let instanceId: String
     var initialSite: TraeSite = .china
@@ -15,50 +19,47 @@ struct TraeLoginSheet: View {
     private enum Phase: Equatable {
         case starting
         case awaitingUser
-        case exchanging
         case success
         case failed(String)
     }
 
     @State private var phase: Phase = .starting
-    @State private var authContext: TraeOAuthClient.AuthContext?
+    @State private var site: TraeSite = .china
     @State private var loginTask: Task<Void, Never>?
+    @State private var currentAuthURL: URL?
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
+            VStack(spacing: 24) {
                 switch phase {
                 case .starting:
-                    Spacer()
                     ProgressView()
                     Text(AppLocalized("Contacting Trae…"))
                         .foregroundStyle(.secondary)
-                        .padding(.top, 8)
-                    Spacer()
                 case .awaitingUser:
-                    if let ctx = authContext {
-                        TraeWebView(url: ctx.authURL) { callbackURL in
-                            handleCallback(callbackURL)
-                        }
-                    }
-                case .exchanging:
-                    Spacer()
-                    ProgressView()
-                    Text(AppLocalized("Completing sign-in…"))
+                    Text(AppLocalized("1. Tap “Open sign-in page”\n2. Sign in to \(site.displayName) in the browser"))
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
-                        .padding(.top, 8)
-                    Spacer()
+                        .multilineTextAlignment(.center)
+                    Button {
+                        if let url = currentAuthURL { presentSafari(url) }
+                    } label: {
+                        Label(AppLocalized("Open sign-in page"), systemImage: "safari")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.small)
+                        Text(AppLocalized("Waiting for sign-in…"))
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                 case .success:
-                    Spacer()
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 44))
                         .foregroundStyle(.green)
-                    Text(AppLocalized("Signed in to \(initialSite.displayName)"))
+                    Text(AppLocalized("Signed in to \(site.displayName)"))
                         .font(.headline)
-                        .padding(.top, 8)
-                    Spacer()
                 case let .failed(message):
-                    Spacer()
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 44))
                         .foregroundStyle(.orange)
@@ -66,14 +67,12 @@ struct TraeLoginSheet: View {
                         .multilineTextAlignment(.center)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal)
-                        .padding(.top, 8)
                     Button(AppLocalized("Try Again")) { start() }
                         .buttonStyle(.borderedProminent)
-                        .padding(.top, 12)
-                    Spacer()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding()
             .navigationTitle(AppLocalized("Trae Login"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -82,48 +81,24 @@ struct TraeLoginSheet: View {
                 }
             }
         }
-        .interactiveDismissDisabled(phase == .starting || phase == .exchanging)
-        .onAppear { start() }
+        .interactiveDismissDisabled(phase == .starting)
+        .onAppear { site = initialSite; start() }
     }
 
     private func start() {
         loginTask?.cancel()
         phase = .starting
-        authContext = nil
+        currentAuthURL = nil
         loginTask = Task { @MainActor in
             do {
-                let ctx = try await TraeOAuthClient.buildAuthURL(profile: TraeLoginProfile.of(initialSite))
+                try await TraeOAuthManager.shared.login(instanceId: instanceId, site: site) { presentation in
+                    Task { @MainActor in
+                        currentAuthURL = presentation.authURL
+                        phase = .awaitingUser
+                        presentSafari(presentation.authURL)
+                    }
+                }
                 if Task.isCancelled { return }
-                authContext = ctx
-                phase = .awaitingUser
-            } catch {
-                if Task.isCancelled { return }
-                phase = .failed(error.localizedDescription)
-            }
-        }
-    }
-
-    private func handleCallback(_ url: URL) {
-        guard let ctx = authContext else { return }
-        loginTask?.cancel()
-        phase = .exchanging
-        loginTask = Task { @MainActor in
-            do {
-                let result = try await TraeOAuthClient.processCallback(url: url, context: ctx)
-                if Task.isCancelled { return }
-                let storage = TraeTokenStorage(
-                    accessToken: result.access,
-                    refreshToken: result.refresh,
-                    expireDate: result.expireAt,
-                    userID: result.userID,
-                    machineID: result.machineID,
-                    deviceID: result.deviceID,
-                    oauthHost: result.origin,
-                    accountName: result.userID.isEmpty ? "Trae" : result.userID,
-                    site: initialSite.rawValue,
-                    lastRefresh: Date()
-                )
-                ProviderKeychainHelper.saveOAuthToken(storage, instanceId: instanceId)
                 phase = .success
                 try? await Task.sleep(nanoseconds: 700_000_000)
                 finish(true)
@@ -134,66 +109,28 @@ struct TraeLoginSheet: View {
         }
     }
 
+    private func presentSafari(_ url: URL) {
+        guard let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene }).first,
+              let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else { return }
+        var topVC = root
+        while let presented = topVC.presentedViewController { topVC = presented }
+        topVC.present(SFSafariViewController(url: url), animated: true)
+    }
+
     private func finish(_ success: Bool) {
         loginTask?.cancel()
+        dismissPresentedSafari()
         onFinish(success)
         dismiss()
     }
-}
 
-/// WKWebView wrapper that intercepts the loopback callback URL.
-struct TraeWebView: UIViewRepresentable {
-    let url: URL
-    let onCallback: (URL) -> Void
-
-    func makeUIView(context: Context) -> WKWebView {
-        let webView = WKWebView(frame: .zero)
-        webView.navigationDelegate = context.coordinator
-        webView.allowsBackForwardNavigationGestures = true
-        webView.load(URLRequest(url: url))
-        return webView
-    }
-
-    func updateUIView(_ uiView: WKWebView, context: Context) {}
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(onCallback: onCallback)
-    }
-
-    final class Coordinator: NSObject, WKNavigationDelegate {
-        let onCallback: (URL) -> Void
-        private var handled = false
-
-        init(onCallback: @escaping (URL) -> Void) {
-            self.onCallback = onCallback
-        }
-
-        /// Trae's auth page redirects to a loopback URL carrying the auth
-        /// payload. We intercept it before any real request by checking the
-        /// query, not the host — iOS may route 127.0.0.1 connections through
-        /// the OS and skip decidePolicyFor, so also catch the provisional
-        /// failure below.
-        private func isCallback(_ url: URL) -> Bool {
-            guard let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems else { return false }
-            return items.contains { ["authCodeInfo", "code", "refreshToken", "error"].contains($0.name) }
-        }
-
-        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-            if let url = navigationAction.request.url, !handled, isCallback(url) {
-                handled = true
-                onCallback(url)
-                decisionHandler(.cancel)
-                return
-            }
-            decisionHandler(.allow)
-        }
-
-        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-            guard !handled else { return }
-            if let url = (error as NSError).userInfo[NSURLErrorFailingURLErrorKey] as? URL, isCallback(url) {
-                handled = true
-                onCallback(url)
-            }
-        }
+    private func dismissPresentedSafari() {
+        guard let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene }).first,
+              let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else { return }
+        var topVC = root
+        while let presented = topVC.presentedViewController { topVC = presented }
+        if topVC is SFSafariViewController { topVC.dismiss(animated: true) }
     }
 }
