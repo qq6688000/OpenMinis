@@ -23,8 +23,13 @@ final class TraeAgentProvider: AgentProvider {
 
     // MARK: - Message conversion
 
-    /// Trae takes OpenAI-shaped messages: assistant turns may carry
-    /// `tool_calls`, and tool output comes back as `role: "tool"`.
+    /// Trae's `llm_utils_chat` takes `content` as an array of text blocks and
+    /// calls as `function_call` (NOT OpenAI's `tool_calls`) — sending the
+    /// OpenAI shape answers 400 `bad request: json: ...`.
+    private static func textBlocks(_ text: String) -> [[String: Any]] {
+        [["type": "text", "text": text]]
+    }
+
     private static func convertMessages(_ messages: [AgentMessage]) -> [[String: Any]] {
         var out: [[String: Any]] = []
         for message in messages {
@@ -49,21 +54,23 @@ final class TraeAgentProvider: AgentProvider {
                         "role": "tool",
                         "tool_call_id": id,
                         "name": name,
-                        "content": content,
+                        "content": textBlocks(content),
                     ])
                 default:
                     break
                 }
             }
 
-            // Tool results go first: they answer the previous assistant turn.
+            // Tool results answer the previous assistant turn.
             out.append(contentsOf: results)
 
             if message.role == .user {
-                if !text.isEmpty { out.append(["role": "user", "content": text]) }
+                if !text.isEmpty {
+                    out.append(["role": "user", "content": textBlocks(text)])
+                }
             } else if !text.isEmpty || !calls.isEmpty {
-                var entry: [String: Any] = ["role": "assistant", "content": text]
-                if !calls.isEmpty { entry["tool_calls"] = calls }
+                var entry: [String: Any] = ["role": "assistant", "content": textBlocks(text)]
+                if !calls.isEmpty { entry["function_call"] = calls }
                 out.append(entry)
             }
         }
