@@ -1,9 +1,13 @@
-import SafariServices
+import AuthenticationServices
 import SwiftUI
 
-/// Browser sign-in sheet for Raccoon. Mirrors TraeLoginSheet: opens the
-/// authorization URL in Safari, waits for the loopback callback, then lets
-/// RaccoonOAuthManager store the token.
+/// Browser sign-in sheet for Raccoon.
+///
+/// The authorisation page only accepts its own `office-raccoon://auth/callback`
+/// scheme (a loopback `redirect` renders "授权链接无效"), so the URL comes back
+/// through a custom scheme rather than a local socket. That makes
+/// `ASWebAuthenticationSession` the right host: it hands back any URL matching
+/// the callback scheme without the page having to leave the app.
 struct RaccoonLoginSheet: View {
     let instanceId: String
     var onFinish: (Bool) -> Void
@@ -19,7 +23,7 @@ struct RaccoonLoginSheet: View {
 
     @State private var phase: Phase = .starting
     @State private var loginTask: Task<Void, Never>?
-    @State private var currentAuthURL: URL?
+    @State private var session: ASWebAuthenticationSession?
 
     var body: some View {
         NavigationStack {
@@ -30,7 +34,22 @@ struct RaccoonLoginSheet: View {
                     Text(AppLocalized("Contacting Raccoon…"))
                         .foregroundStyle(.secondary)
                 case .awaitingUser:
-                    awaitingBody
+                    Text(AppLocalized("1. Tap “Open sign-in page”\n2. Sign in to Raccoon and confirm the authorisation"))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                    Button {
+                        start()
+                    } label: {
+                        Label(AppLocalized("Open sign-in page"), systemImage: "safari")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.small)
+                        Text(AppLocalized("Waiting for sign-in…"))
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                 case .success:
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 44))
@@ -60,41 +79,18 @@ struct RaccoonLoginSheet: View {
             }
         }
         .interactiveDismissDisabled(phase == .starting)
-        .onAppear { start() }
+        .onAppear { if phase == .starting { phase = .awaitingUser } }
     }
 
-    @ViewBuilder
-    private var awaitingBody: some View {
-        Text(AppLocalized("1. Tap “Open sign-in page”\n2. Sign in to Raccoon in the browser"))
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-            .multilineTextAlignment(.center)
-        Button {
-            if let url = currentAuthURL { presentSafari(url) }
-        } label: {
-            Label(AppLocalized("Open sign-in page"), systemImage: "safari")
-        }
-        .buttonStyle(.borderedProminent)
-        HStack(spacing: 6) {
-            ProgressView().controlSize(.small)
-            Text(AppLocalized("Waiting for sign-in…"))
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-        .padding(.top, 4)
-    }
-
+    /// Kicks off the sign-in. The manager builds the page URL, opens it through
+    /// `ASWebAuthenticationSession`, and resolves when the scheme callback lands.
     private func start() {
         loginTask?.cancel()
-        phase = .starting
-        currentAuthURL = nil
-        loginTask = Task { @MainActor in
+        let task = Task { @MainActor in
             do {
                 try await RaccoonOAuthManager.shared.login(instanceId: instanceId) { url in
                     Task { @MainActor in
-                        currentAuthURL = url
-                        phase = .awaitingUser
-                        presentSafari(url)
+                        presentSession(url)
                     }
                 }
                 if Task.isCancelled { return }
@@ -106,30 +102,51 @@ struct RaccoonLoginSheet: View {
                 phase = .failed(error.localizedDescription)
             }
         }
+        loginTask = task
     }
 
-    private func presentSafari(_ url: URL) {
-        guard let scene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene }).first,
-              let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else { return }
-        var topVC = root
-        while let presented = topVC.presentedViewController { topVC = presented }
-        topVC.present(SFSafariViewController(url: url), animated: true)
+    @MainActor
+    private func presentSession(_ url: URL) {
+        let session = ASWebAuthenticationSession(
+            url: url,
+            callbackURLScheme: "office-raccoon"
+        ) { callbackURL, error in
+            Task { @MainActor in
+                if let callbackURL {
+                    // Hand it to the broker the manager is awaiting.
+                    RaccoonCallbackBroker.shared.deliver(callbackURL)
+                    return
+                }
+                if let error = error as? ASWebAuthenticationSessionError,
+                   error.code == .canceledLogin {
+                    RaccoonCallbackBroker.shared.cancel()
+                } else if let error {
+                    RaccoonCallbackBroker.shared.deliver(URL(string: "office-raccoon://auth/callback?error=\(error.localizedDescription.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "auth_failed")")!)
+                }
+            }
+        }
+        session.presentationContextProvider = AnchorProvider.shared
+        session.prefersEphemeralWebBrowserSession = false
+        self.session = session
+        session.start()
     }
 
     private func finish(_ success: Bool) {
         loginTask?.cancel()
-        dismissPresentedSafari()
+        session?.cancel()
+        session = nil
         onFinish(success)
         dismiss()
     }
+}
 
-    private func dismissPresentedSafari() {
-        guard let scene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene }).first,
-              let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else { return }
-        var topVC = root
-        while let presented = topVC.presentedViewController { topVC = presented }
-        if topVC is SFSafariViewController { topVC.dismiss(animated: true) }
+/// Supplies the window `ASWebAuthenticationSession` anchors its sheet to.
+final class AnchorProvider: NSObject, ASWebAuthenticationPresentationContextProviding {
+    static let shared = AnchorProvider()
+    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let window = scenes.first(where: { $0.activationState == .foregroundActive })?.windows.first(where: { $0.isKeyWindow })
+            ?? scenes.flatMap(\.windows).first(where: { $0.isKeyWindow })
+        return window ?? ASPresentationAnchor()
     }
 }

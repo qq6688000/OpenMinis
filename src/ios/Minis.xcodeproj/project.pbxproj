@@ -570,6 +570,7 @@
 		ETRAE0005 /* TraeOAuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = ETRAE0006 /* TraeOAuthManager.swift */; };
 		ERACC0001 /* RaccoonOAuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = ERACC0002 /* RaccoonOAuthManager.swift */; };
 		ERACC0003 /* RaccoonOAuthLogin.swift in Sources */ = {isa = PBXBuildFile; fileRef = ERACC0004 /* RaccoonOAuthLogin.swift */; };
+		ERACC0007 /* RaccoonCallbackBroker.swift in Sources */ = {isa = PBXBuildFile; fileRef = ERACC0008 /* RaccoonCallbackBroker.swift */; };
 		ERACC0005 /* RaccoonLoginSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = ERACC0006 /* RaccoonLoginSheet.swift */; };
 		ETRAE0009 /* TraeOAuthLogin.swift in Sources */ = {isa = PBXBuildFile; fileRef = ETRAE000A /* TraeOAuthLogin.swift */; };
 		ETRAE000D /* TraeToolSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = ETRAE000E /* TraeToolSupport.swift */; };
@@ -1394,6 +1395,7 @@
 		ETRAE0006 /* TraeOAuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TraeOAuthManager.swift; path = Providers/Trae/TraeOAuthManager.swift; sourceTree = SOURCE_ROOT; };
 		ERACC0002 /* RaccoonOAuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RaccoonOAuthManager.swift; path = Providers/Raccoon/RaccoonOAuthManager.swift; sourceTree = SOURCE_ROOT; };
 		ERACC0004 /* RaccoonOAuthLogin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RaccoonOAuthLogin.swift; path = Providers/Raccoon/RaccoonOAuthLogin.swift; sourceTree = SOURCE_ROOT; };
+		ERACC0008 /* RaccoonCallbackBroker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RaccoonCallbackBroker.swift; path = Providers/Raccoon/RaccoonCallbackBroker.swift; sourceTree = SOURCE_ROOT; };
 		ERACC0006 /* RaccoonLoginSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RaccoonLoginSheet.swift; path = Views/Providers/RaccoonLoginSheet.swift; sourceTree = SOURCE_ROOT; };
 		ETRAE000A /* TraeOAuthLogin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TraeOAuthLogin.swift; path = Providers/Trae/TraeOAuthLogin.swift; sourceTree = SOURCE_ROOT; };
 		ETRAE000E /* TraeToolSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TraeToolSupport.swift; path = Providers/Trae/TraeToolSupport.swift; sourceTree = SOURCE_ROOT; };
@@ -1805,6 +1807,7 @@
 				ETRAE0006 /* TraeOAuthManager.swift */,
 				ERACC0002 /* RaccoonOAuthManager.swift */,
 				ERACC0004 /* RaccoonOAuthLogin.swift */,
+				ERACC0008 /* RaccoonCallbackBroker.swift */,
 				ETRAE000A /* TraeOAuthLogin.swift */,
 				ETRAE000E /* TraeToolSupport.swift */,
 				ETRAE000C /* TraeLoginSheet.swift */,
@@ -3426,6 +3429,7 @@
 				ETRAE0005 /* TraeOAuthManager.swift in Sources */,
 				ERACC0001 /* RaccoonOAuthManager.swift in Sources */,
 				ERACC0003 /* RaccoonOAuthLogin.swift in Sources */,
+				ERACC0007 /* RaccoonCallbackBroker.swift in Sources */,
 				ERACC0005 /* RaccoonLoginSheet.swift in Sources */,
 				ETRAE0009 /* TraeOAuthLogin.swift in Sources */,
 				ETRAE000D /* TraeToolSupport.swift in Sources */,

@@ -186,10 +186,12 @@ final class SceneDelegate: NSObject, UIWindowSceneDelegate {
             logger.info("[Share] scene \(phase) URL: \(url.absoluteString)")
             Task { @MainActor in
                 let coordinator = ShareCoordinator.shared
-                // A .minisbak must reach the restore flow, not the attachment
-                // pipeline — canIngest() accepts any file URL, so this has to
-                // be checked first.
-                if BackupOpenRouter.handle(url) {
+                // [T-raccoon] The sign-in page returns through the app's own
+                // `office-raccoon://auth/callback` scheme; route it to the
+                // broker that the running sign-in is waiting on.
+                if RaccoonCallbackBroker.handles(url) {
+                    RaccoonCallbackBroker.shared.deliver(url)
+                } else if BackupOpenRouter.handle(url) {
                     // handled
                 } else if ExternalFileImporter.canIngest(url) {
                     ExternalFileImporter.ingest(url, into: coordinator)

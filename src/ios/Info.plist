@@ -183,6 +183,14 @@
 				<string>minis-mcp</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>Raccoon OAuth Callback</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>office-raccoon</string>
+			</array>
+		</dict>
 	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
