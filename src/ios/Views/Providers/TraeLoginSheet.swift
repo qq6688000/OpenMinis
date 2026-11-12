@@ -1,204 +1,147 @@
 import SwiftUI
-import WebKit
+import AuthenticationServices
 
-/// In-app browser sign-in sheet for Trae (both builds). Uses a WKWebView
-/// instead of SFSafariViewController + loopback listener: the WebView shows
-/// the authorization page inside the app, and its navigation delegate
-/// intercepts the loopback callback URL before any real request is made.
+/// In-app Trae OAuth sign-in.
+///
+/// Uses `ASWebAuthenticationSession` (the system authentication browser) so the
+/// Trae sign-in page runs in a real browser session with a clean network
+/// environment — `WKWebView` embedded in the app surfaced a "network error"
+/// from the page's own scripts. The callback is a custom scheme
+/// (`traecb://authorize`) that the session intercepts without touching the
+/// local network stack.
 struct TraeLoginSheet: View {
-    let instanceId: String
-    var initialSite: TraeSite = .china
-    var onFinish: (Bool) -> Void
-
     @Environment(\.dismiss) private var dismiss
-
-    private enum Phase: Equatable {
-        case starting
-        case awaitingUser
-        case exchanging
-        case success
-        case failed(String)
-    }
-
     @State private var phase: Phase = .starting
-    @State private var authContext: TraeOAuthClient.AuthContext?
-    @State private var loginTask: Task<Void, Never>?
+    @State private var errorMessage: String?
+    @State private var session: ASWebAuthenticationSession?
+
+    let instanceId: String
+    let initialSite: TraeLoginProfile.Profile
+    let onDone: (Bool) -> Void
+
+    enum Phase: Equatable {
+        case starting
+        case exchanging
+        case done
+        case failed
+    }
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
+            VStack(spacing: 18) {
                 switch phase {
                 case .starting:
-                    Spacer()
                     ProgressView()
-                    Text(AppLocalized("Contacting Trae…"))
+                    Text(AppLocalized("正在打开 Trae 登录页…"))
                         .foregroundStyle(.secondary)
-                        .padding(.top, 8)
-                    Spacer()
-                case .awaitingUser:
-                    if let ctx = authContext {
-                        TraeWebView(url: ctx.authURL) { callbackURL in
-                            handleCallback(callbackURL)
+                case .exchanging:
+                    ProgressView()
+                    Text(AppLocalized("正在验证身份…"))
+                        .foregroundStyle(.secondary)
+                case .done:
+                    VStack(spacing: 10) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 44))
+                            .foregroundStyle(.green)
+                        Text(AppLocalized("Signed in to Trae"))
+                            .font(.headline)
+                    }
+                case .failed:
+                    VStack(spacing: 10) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 44))
+                            .foregroundStyle(.red)
+                        if let msg = errorMessage {
+                            ScrollView {
+                                Text(msg)
+                                    .font(.footnote)
+                                    .foregroundStyle(.red)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal)
+                            }
+                            .frame(maxHeight: 160)
                         }
                     }
-                case .exchanging:
-                    Spacer()
-                    ProgressView()
-                    Text(AppLocalized("Completing sign-in…"))
-                        .foregroundStyle(.secondary)
-                        .padding(.top, 8)
-                    Spacer()
-                case .success:
-                    Spacer()
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 44))
-                        .foregroundStyle(.green)
-                    Text(AppLocalized("Signed in to \(initialSite.displayName)"))
-                        .font(.headline)
-                        .padding(.top, 8)
-                    Spacer()
-                case let .failed(message):
-                    Spacer()
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 44))
-                        .foregroundStyle(.orange)
-                    Text(message)
-                        .multilineTextAlignment(.center)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal)
-                        .padding(.top, 8)
-                    Button(AppLocalized("Try Again")) { start() }
-                        .buttonStyle(.borderedProminent)
-                        .padding(.top, 12)
-                    Spacer()
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .navigationTitle(AppLocalized("Trae Login"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(AppLocalized("Cancel")) { finish(false) }
+                    Button(AppLocalized("取消")) { dismiss() }
                 }
             }
+            .interactiveDismissDisabled(phase == .starting || phase == .exchanging)
         }
-        .interactiveDismissDisabled(phase == .starting || phase == .exchanging)
-        .onAppear { start() }
+        .task { await start() }
     }
 
-    private func start() {
-        loginTask?.cancel()
-        phase = .starting
-        authContext = nil
-        loginTask = Task { @MainActor in
-            do {
-                let ctx = try await TraeOAuthClient.buildAuthURL(profile: TraeLoginProfile.of(initialSite))
-                if Task.isCancelled { return }
-                authContext = ctx
-                phase = .awaitingUser
-            } catch {
-                if Task.isCancelled { return }
-                phase = .failed(error.localizedDescription)
+    @MainActor
+    private func start() async {
+        do {
+            let ctx = try await TraeOAuthClient.buildAuthURL(profile: TraeLoginProfile.of(initialSite))
+            let s = ASWebAuthenticationSession(
+                url: ctx.authURL,
+                callbackURLScheme: "traecb"
+            ) { [self] callbackURL, error in
+                if let error {
+                    Task { @MainActor in
+                        if case ASWebAuthenticationSessionError.canceledLogin = error as NSError {
+                            dismiss()
+                        } else {
+                            phase = .failed
+                            errorMessage = AppLocalized("登录被取消或失败：") + error.localizedDescription
+                        }
+                    }
+                    return
+                }
+                guard let url = callbackURL else { return }
+                Task { @MainActor in await handle(url, context: ctx) }
             }
+            s.presentationContextProvider = PresentationAnchor()
+            s.prefersEphemeralWebBrowserSession = false
+            s.start()
+            session = s
+        } catch {
+            phase = .failed
+            errorMessage = AppLocalized("打开登录页失败：") + error.localizedDescription
         }
     }
 
-    private func handleCallback(_ url: URL) {
-        guard let ctx = authContext else { return }
-        loginTask?.cancel()
+    @MainActor
+    private func handle(_ url: URL, context: TraeOAuthClient.AuthContext) async {
         phase = .exchanging
-        loginTask = Task { @MainActor in
-            do {
-                let result = try await TraeOAuthClient.processCallback(url: url, context: ctx)
-                if Task.isCancelled { return }
-                let storage = TraeTokenStorage(
-                    accessToken: result.access,
-                    refreshToken: result.refresh,
-                    expireDate: result.expireAt,
-                    userID: result.userID,
-                    machineID: result.machineID,
-                    deviceID: result.deviceID,
-                    oauthHost: result.origin,
-                    accountName: result.userID.isEmpty ? "Trae" : result.userID,
-                    site: initialSite.rawValue,
-                    lastRefresh: Date()
-                )
-                ProviderKeychainHelper.saveOAuthToken(storage, instanceId: instanceId)
-                phase = .success
-                try? await Task.sleep(nanoseconds: 700_000_000)
-                finish(true)
-            } catch {
-                if Task.isCancelled { return }
-                phase = .failed(error.localizedDescription)
-            }
+        do {
+            let result = try await TraeOAuthClient.processCallback(url: url, context: context)
+            let storage = TraeTokenStorage(
+                accessToken: result.access,
+                refreshToken: result.refresh,
+                expireDate: result.expireAt,
+                userID: result.userID,
+                machineID: result.machineID,
+                deviceID: result.deviceID,
+                oauthHost: result.origin,
+                accountName: result.userID,
+                site: TraeLoginProfile.of(initialSite).site.rawValue,
+                lastRefresh: Date()
+            )
+            ProviderKeychainHelper.saveOAuthToken(storage, instanceId: instanceId)
+            phase = .done
+            onDone(true)
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            dismiss()
+        } catch {
+            phase = .failed
+            errorMessage = AppLocalized("登录失败：") + error.localizedDescription
         }
     }
 
-    private func finish(_ success: Bool) {
-        loginTask?.cancel()
-        onFinish(success)
-        dismiss()
-    }
-}
-
-/// WKWebView wrapper that intercepts the `traecb://` callback URL via a
-/// WKURLSchemeHandler. Custom schemes never touch the network stack, so iOS
-/// cannot route them away from decidePolicyFor — the callback is always caught.
-struct TraeWebView: UIViewRepresentable {
-    let url: URL
-    let onCallback: (URL) -> Void
-
-    func makeUIView(context: Context) -> WKWebView {
-        let config = WKWebViewConfiguration()
-        config.setURLSchemeHandler(context.coordinator, forURLScheme: "traecb")
-        let webView = WKWebView(frame: .zero, configuration: config)
-        webView.navigationDelegate = context.coordinator
-        webView.allowsBackForwardNavigationGestures = true
-        webView.load(URLRequest(url: url))
-        return webView
-    }
-
-    func updateUIView(_ uiView: WKWebView, context: Context) {}
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(onCallback: onCallback)
-    }
-
-    final class Coordinator: NSObject, WKNavigationDelegate, WKURLSchemeHandler {
-        let onCallback: (URL) -> Void
-        private var handled = false
-
-        init(onCallback: @escaping (URL) -> Void) {
-            self.onCallback = onCallback
+    private final class PresentationAnchor: NSObject, ASWebAuthenticationPresentationContextProviding {
+        func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+            let scenes = UIApplication.shared.connectedScenes
+            let window = (scenes.first(where: { $0.activationState == .foregroundActive })
+                as? UIWindowScene)?.windows.first(where: { $0.isKeyWindow })
+            return window ?? ASPresentationAnchor()
         }
-
-        private func isCallback(_ url: URL) -> Bool {
-            guard url.scheme == "traecb" else { return false }
-            guard let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems else { return true }
-            return items.contains { ["authCodeInfo", "code", "refreshToken", "error"].contains($0.name) }
-        }
-
-        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-            if let url = navigationAction.request.url, !handled, isCallback(url) {
-                handled = true
-                onCallback(url)
-                decisionHandler(.cancel)
-                return
-            }
-            decisionHandler(.allow)
-        }
-
-        // MARK: - WKURLSchemeHandler
-
-        func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
-            guard !handled else { urlSchemeTask.didFailWithError(NSError(domain: "traecb", code: -1)) ; return }
-            handled = true
-            onCallback(urlSchemeTask.request.url ?? urlSchemeTask.request.url!)
-            let response = URLResponse(url: urlSchemeTask.request.url!, mimeType: "text/html", expectedContentLength: 0, textEncodingName: nil)
-            urlSchemeTask.didReceive(response)
-            urlSchemeTask.didFinish()
-        }
-
-        func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) {}
     }
 }
