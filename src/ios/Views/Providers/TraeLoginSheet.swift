@@ -85,8 +85,9 @@ struct TraeLoginSheet: View {
                 callbackURLScheme: "traecb"
             ) { [self] callbackURL, error in
                 if let error {
+                    let code = (error as NSError).code
                     Task { @MainActor in
-                        if case ASWebAuthenticationSessionError.canceledLogin = error as NSError {
+                        if code == ASWebAuthenticationSessionError.canceledLogin.rawValue {
                             dismiss()
                         } else {
                             phase = .failed
