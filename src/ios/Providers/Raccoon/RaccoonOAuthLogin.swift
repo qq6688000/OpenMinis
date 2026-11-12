@@ -124,9 +124,33 @@ enum RaccoonOAuthLogin {
         return bytes.map { String(format: "%02x", $0) }.joined()
     }
 
+    /// Reads a failure out of the gateway's answer.
+    ///
+    /// The envelope is `{code, message, data}` — but a SUCCESSFUL call answers
+    /// `message: "success"`, so a bare "any non-empty message is an error" test
+    /// reports every good exchange as `refused: success`. Only treat it as a
+    /// failure when the code says so, or when the message is not the literal
+    /// success marker.
     static func envelopeError(_ root: [String: Any]) -> String? {
-        for key in ["Message", "message", "Error", "error"] {
-            if let v = root[key] as? String, !v.isEmpty { return v }
+        if let success = root["success"] as? Bool, success { return nil }
+
+        let code = (root["code"] as? NSNumber)?.intValue
+            ?? Int(root["code"] as? String ?? "")
+        let message = (root["message"] as? String)
+            ?? (root["Message"] as? String)
+            ?? (root["msg"] as? String)
+        let normalized = message?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+        if let code, code != 0, code != 200 {
+            return message ?? "code \(code)"
+        }
+        if let normalized, !normalized.isEmpty,
+           normalized != "success", normalized != "ok", normalized != "成功" {
+            return message
+        }
+        if let error = root["Error"] as? String, !error.isEmpty { return error }
+        if let error = root["error"] as? String, !error.isEmpty, error.lowercased() != "success" {
+            return error
         }
         return nil
     }
