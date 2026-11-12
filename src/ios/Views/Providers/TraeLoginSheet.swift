@@ -141,13 +141,17 @@ struct TraeLoginSheet: View {
     }
 }
 
-/// WKWebView wrapper that intercepts the loopback callback URL.
+/// WKWebView wrapper that intercepts the `traecb://` callback URL via a
+/// WKURLSchemeHandler. Custom schemes never touch the network stack, so iOS
+/// cannot route them away from decidePolicyFor — the callback is always caught.
 struct TraeWebView: UIViewRepresentable {
     let url: URL
     let onCallback: (URL) -> Void
 
     func makeUIView(context: Context) -> WKWebView {
-        let webView = WKWebView(frame: .zero)
+        let config = WKWebViewConfiguration()
+        config.setURLSchemeHandler(context.coordinator, forURLScheme: "traecb")
+        let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = true
         webView.load(URLRequest(url: url))
@@ -160,7 +164,7 @@ struct TraeWebView: UIViewRepresentable {
         Coordinator(onCallback: onCallback)
     }
 
-    final class Coordinator: NSObject, WKNavigationDelegate {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKURLSchemeHandler {
         let onCallback: (URL) -> Void
         private var handled = false
 
@@ -168,13 +172,9 @@ struct TraeWebView: UIViewRepresentable {
             self.onCallback = onCallback
         }
 
-        /// Trae's auth page redirects to a loopback URL carrying the auth
-        /// payload. We intercept it before any real request by checking the
-        /// query, not the host — iOS may route 127.0.0.1 connections through
-        /// the OS and skip decidePolicyFor, so also catch the provisional
-        /// failure below.
         private func isCallback(_ url: URL) -> Bool {
-            guard let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems else { return false }
+            guard url.scheme == "traecb" else { return false }
+            guard let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems else { return true }
             return items.contains { ["authCodeInfo", "code", "refreshToken", "error"].contains($0.name) }
         }
 
@@ -188,12 +188,17 @@ struct TraeWebView: UIViewRepresentable {
             decisionHandler(.allow)
         }
 
-        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-            guard !handled else { return }
-            if let url = (error as NSError).userInfo[NSURLErrorFailingURLErrorKey] as? URL, isCallback(url) {
-                handled = true
-                onCallback(url)
-            }
+        // MARK: - WKURLSchemeHandler
+
+        func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
+            guard !handled else { urlSchemeTask.didFailWithError(NSError(domain: "traecb", code: -1)) ; return }
+            handled = true
+            onCallback(urlSchemeTask.request.url ?? urlSchemeTask.request.url!)
+            let response = URLResponse(url: urlSchemeTask.request.url!, mimeType: "text/html", expectedContentLength: 0, textEncodingName: nil)
+            urlSchemeTask.didReceive(response)
+            urlSchemeTask.didFinish()
         }
+
+        func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) {}
     }
 }

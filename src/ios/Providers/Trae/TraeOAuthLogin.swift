@@ -368,7 +368,7 @@ enum TraeOAuthClient {
         let deviceID = profile.fixedDeviceID ?? randomDeviceID()
         let loginTraceID = UUID().uuidString
         let loginHost = try await signInHost(profile: profile, loginTraceID: loginTraceID)
-        let redirect = "http://127.0.0.1:1" + TraeLoopback.callbackPath
+        let redirect = "traecb://authorize"
         let page = try loginURL(
             loginHost: loginHost,
             redirect: redirect,
