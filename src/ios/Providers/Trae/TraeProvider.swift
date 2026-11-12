@@ -50,6 +50,135 @@ final class TraeProvider: LLMProvider {
         return LLMResponse(text: text, stopReason: stopReason, usage: usage)
     }
 
+    /// Raw chat event stream, including tool calls. Used by the agent loop;
+    /// `streamMessage` (the plain-text `LLMProvider` path) wraps this.
+    enum ChatEvent: Sendable {
+        case text(String)
+        case toolCall(TraeToolCall)
+        case usage(LLMUsage)
+        case finished(AgentStopReason)
+    }
+
+    func streamChat(
+        messages: [[String: Any]],
+        systemPrompt: String?,
+        toolSchemas: [[String: Any]]?
+    ) async throws -> AsyncThrowingStream<ChatEvent, Error> {
+        let token = try await TraeOAuthManager.shared.validAccessToken(instanceId: instanceId)
+        let url = try chatURL()
+        let body = Self.buildBody(
+            messages: messages,
+            systemPrompt: systemPrompt,
+            model: model.id,
+            tools: toolSchemas
+        )
+        var request = URLRequest(url: url, timeoutInterval: 120)
+        request.httpMethod = "POST"
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        request.setValue("Cloud-IDE-JWT \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("Trae/0.1.61", forHTTPHeaderField: "User-Agent")
+        request.setValue("0.1.61", forHTTPHeaderField: "x-ide-version")
+        request.setValue("20260820", forHTTPHeaderField: "x-ide-version-code")
+        if let uid = await TraeOAuthManager.shared.userID(instanceId: instanceId) {
+            request.setValue(uid, forHTTPHeaderField: "X-Uid")
+        }
+
+        return AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    let (data, response) = try await URLSession.shared.data(for: request)
+                    let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                    guard (200..<300).contains(status) else {
+                        let msg = String(data: data, encoding: .utf8) ?? "HTTP \(status)"
+                        throw LLMError.providerError(message: "Trae \(status): \(msg.prefix(240))")
+                    }
+                    try Self.parseChatSSE(data: data) { continuation.yield($0) }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    /// Parses Trae's SSE, surfacing tool calls as their own events.
+    static func parseChatSSE(data: Data, yield: @escaping (ChatEvent) -> Void) throws {
+        let text = String(data: data, encoding: .utf8) ?? ""
+        var sawToolCall = false
+        for frame in text.components(separatedBy: "\n\n") {
+            var event = "output"
+            var payload = ""
+            for line in frame.components(separatedBy: "\n") {
+                if line.hasPrefix("event:") {
+                    event = line.dropFirst(6).trimmingCharacters(in: .whitespaces)
+                } else if line.hasPrefix("data:") {
+                    payload += line.dropFirst(5).trimmingCharacters(in: .whitespaces)
+                }
+            }
+            guard !payload.isEmpty,
+                  let root = (try? JSONSerialization.jsonObject(with: Data(payload.utf8))) as? [String: Any]
+            else { continue }
+
+            if let status = root["statusCodeValue"] as? Int, status != 200 {
+                let bodyText = String(describing: root["body"] ?? "")
+                throw LLMError.providerError(message: "Trae \(status): \(bodyText.prefix(240))")
+            }
+
+            switch event {
+            case "error":
+                let code = root["code"].map { String(describing: $0) } ?? ""
+                let message = root["message"] as? String ?? "unknown"
+                throw LLMError.providerError(message: "Trae \(code.isEmpty ? "error" : "code \(code)"): \(message)")
+            case "token_usage":
+                if let usage = usage(from: root) { yield(.usage(usage)) }
+            case "done":
+                yield(.finished(finishReason(root["finish_reason"] as? String)))
+            case "output":
+                if let reasoning = root["reasoning_content"] as? String, !reasoning.isEmpty {
+                    yield(.text(reasoning))
+                }
+                if let response = root["response"] as? String, !response.isEmpty {
+                    yield(.text(response))
+                }
+                if let calls = root["tool_calls"] as? [[String: Any]] {
+                    for call in calls {
+                        guard let parsed = Self.toolCall(call) else { continue }
+                        sawToolCall = true
+                        yield(.toolCall(parsed))
+                    }
+                }
+            default:
+                break
+            }
+        }
+        if sawToolCall {
+            // The done frame may report "stop"; a turn with tool calls is a
+            // tool-use turn regardless.
+            yield(.finished(.toolUse))
+        }
+    }
+
+    static func toolCall(_ call: [String: Any]) -> TraeToolCall? {
+        let function = (call["function_call"] ?? call["function"]) as? [String: Any] ?? call
+        let name = function["name"] as? String ?? call["name"] as? String ?? ""
+        guard !name.isEmpty else { return nil }
+        let arguments: String
+        if let text = function["arguments"] as? String {
+            arguments = text
+        } else if let object = function["arguments"],
+                  let data = try? JSONSerialization.data(withJSONObject: object),
+                  let text = String(data: data, encoding: .utf8) {
+            arguments = text
+        } else {
+            arguments = "{}"
+        }
+        let id = call["id"] as? String ?? function["id"] as? String ?? ""
+        return TraeToolCall(id: id, name: name, arguments: arguments)
+    }
+
     func streamMessage(
         messages: [LLMMessage],
         systemPrompt: String?,
