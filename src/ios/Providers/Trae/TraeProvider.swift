@@ -135,7 +135,7 @@ final class TraeProvider: LLMProvider {
             case "token_usage":
                 if let usage = usage(from: root) { yield(.usage(usage)) }
             case "done":
-                yield(.finished(finishReason(root["finish_reason"] as? String)))
+                yield(.finished(Self.agentStopReason(root["finish_reason"] as? String)))
             case "output":
                 if let reasoning = root["reasoning_content"] as? String, !reasoning.isEmpty {
                     yield(.text(reasoning))
@@ -324,6 +324,15 @@ final class TraeProvider: LLMProvider {
             default:
                 break
             }
+        }
+    }
+
+    /// Trae's finish reason as the agent loop's enum.
+    static func agentStopReason(_ raw: String?) -> AgentStopReason {
+        switch raw {
+        case "tool_calls", "function_call": return .toolUse
+        case "length", "max_tokens": return .maxTokens
+        default: return .endTurn
         }
     }
 
