@@ -102,7 +102,15 @@ final class TraeProvider: LLMProvider {
                     try Self.parseChatSSE(data: data) { continuation.yield($0) }
                     continuation.finish()
                 } catch {
-                    continuation.finish(throwing: error)
+                    // A raw URLError (-1005 networkConnectionLost, -1001 timed
+                    // out, …) escapes the retry gate in the agent loop, which
+                    // only matches `LLMError`. Wrap connection drops so a stall
+                    // can retry instead of surfacing "网络连接已中断" at once.
+                    if let urlError = error as? URLError, !Task.isCancelled {
+                        continuation.finish(throwing: LLMError.networkError(underlying: urlError))
+                    } else {
+                        continuation.finish(throwing: error)
+                    }
                 }
             }
             continuation.onTermination = { _ in task.cancel() }
