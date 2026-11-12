@@ -158,9 +158,9 @@ final class TraeAgentProvider: AgentProvider {
 
                 /// Returns a human-readable reason when the model is looping.
                 func loopReason() -> String? {
-                    if let (fragment, count) = fragmentCounts.max(by: { $0.value < $1.value }),
-                       count >= 5, fragment.count >= 3 {
-                        return "fragment \(fragment.prefix(40)) ×\(count)"
+                    if let top = fragmentCounts.max(by: { $0.value < $1.value }),
+                       top.value >= 5, top.key.count >= 3 {
+                        return "fragment \(top.key.prefix(40)) ×\(top.value)"
                     }
                     if accumulated.count >= 600 {
                         let tail = String(accumulated.suffix(300))
@@ -183,10 +183,11 @@ final class TraeAgentProvider: AgentProvider {
                     fragmentCounts[key, default: 0] += 1
                     if recentFragments.count > 40 {
                         let dropped = recentFragments.removeFirst()
-                        if let n = fragmentCounts[dropped], n <= 1 {
+                        let remaining = (fragmentCounts[dropped] ?? 1) - 1
+                        if remaining <= 0 {
                             fragmentCounts[dropped] = nil
                         } else {
-                            fragmentCounts[dropped] = n - 1
+                            fragmentCounts[dropped] = remaining
                         }
                     }
                 }
