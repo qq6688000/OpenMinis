@@ -84,6 +84,8 @@ enum LLMProviderFactory {
             return makeTraeProvider(instance: instance, model: entry.model)
         case .raccoon:
             return openCode(makeRaccoonProvider(instance: instance, model: entry.model))
+        case .zai:
+            return openCode(makeZaiProvider(instance: instance, model: entry.model))
         case .unsupported:
             throw FactoryError.voiceOnlyProvider
         }
@@ -525,6 +527,32 @@ enum LLMProviderFactory {
         provider.extraHeaders["Content-Type"] = "application/json"
         provider.extraHeaders["Accept"] = "application/json"
         provider.extraHeaders["User-Agent"] = RaccoonOAuthManager.userAgent
+        return provider
+    }
+
+    /// Z.ai：官方 OpenAI 兼容端点 `{chatBaseURL}/chat/completions`（GLM Coding Plan）。
+    /// 账号用 Bearer token 认证，请求带 `zcodeAppVersion` 头，走 OpenAIProvider
+    /// 的 oauthTokenProvider + extraHeaders，站点由 `instance.zaiSite` 指定。
+    static func makeZaiProvider(instance: ProviderInstance, model: LLMModel) -> OpenAIProvider {
+        let site = instance.zaiSite ?? .china
+        let provider: OpenAIProvider
+        if let manualToken = ProviderKeychainHelper.loadOAuthString(
+            instanceId: instance.id, account: "manual-oauth-token") {
+            provider = OpenAIProvider(apiKey: manualToken, model: model,
+                                      customBaseURL: site.chatBaseURL, appendV1Suffix: false)
+        } else {
+            let iid = instance.id
+            provider = OpenAIProvider(
+                oauthTokenProvider: { try await ZaiOAuthManager.shared.validAccessToken(instanceId: iid) },
+                model: model
+            )
+            provider.customBaseURL = site.chatBaseURL
+            provider.appendV1Suffix = false
+        }
+        provider.extraHeaders["Content-Type"] = "application/json"
+        provider.extraHeaders["Accept"] = "application/json"
+        provider.extraHeaders["User-Agent"] = ZaiOAuthManager.userAgent
+        provider.extraHeaders["zcodeAppVersion"] = ZaiOAuthManager.appVersion
         return provider
     }
 

@@ -181,6 +181,7 @@ struct AddProviderView: View {
     @State private var showCopilotLogin = false
     @State private var showTraeLogin = false
     @State private var showRaccoonLogin = false
+    @State private var showZaiLogin = false
     @State private var selectedTraeSite: TraeSite = .china
     @State private var oauthAuthTime: Date?
     @State private var showDataSharingConsent = false
@@ -380,6 +381,15 @@ struct AddProviderView: View {
                 if success {
                     oauthAuthTime = Date()
                     oauthMaskedToken = loadMaskedToken(type: .raccoon)
+                    pendingOAuthDone = true
+                }
+            }
+        }
+        .sheet(isPresented: $showZaiLogin) {
+            ZaiLoginSheet(instanceId: pendingInstanceId, initialSite: .china) { success in
+                if success {
+                    oauthAuthTime = Date()
+                    oauthMaskedToken = loadMaskedToken(type: .zai)
                     pendingOAuthDone = true
                 }
             }
@@ -1117,6 +1127,10 @@ struct AddProviderView: View {
             case .raccoon:
                 showRaccoonLogin = true
                 return
+            // [T-zai] CLI device-code flow runs in ZaiLoginSheet.
+            case .zai:
+                showZaiLogin = true
+                return
             case .unsupported: break // free / unsupported — no OAuth
             }
             oauthAuthTime = Date()
@@ -1158,6 +1172,8 @@ struct AddProviderView: View {
             token = ProviderKeychainHelper.loadOAuthToken(instanceId: pendingInstanceId, as: TraeTokenStorage.self)?.accessToken
         case .raccoon:
             token = ProviderKeychainHelper.loadOAuthToken(instanceId: pendingInstanceId, as: RaccoonTokenStorage.self)?.accessToken
+        case .zai:
+            token = ProviderKeychainHelper.loadOAuthToken(instanceId: pendingInstanceId, as: ZaiTokenStorage.self)?.accessToken
         case .unsupported:
             token = nil // free / unsupported — no token
         }
@@ -1242,6 +1258,7 @@ struct AddProviderView: View {
         case .trae: return AppLocalized("Sign in with Trae CN")
         case .traeIntl: return AppLocalized("Sign in with Trae")
         case .raccoon: return AppLocalized("Sign in with Raccoon")
+        case .zai: return AppLocalized("Sign in with Z.ai")
         case .unsupported: return AppLocalized("Sign In")
         }
     }
@@ -1261,6 +1278,7 @@ struct AddProviderView: View {
         case .workBuddy: return "" // OAuth only
         case .trae, .traeIntl: return "" // OAuth only
         case .raccoon: return "" // OAuth only
+        case .zai: return "" // OAuth only
         case .unsupported: return ""
         }
     }
@@ -1280,6 +1298,7 @@ struct AddProviderView: View {
         case .trae: return "Trae"
         case .traeIntl: return "Trae (Intl)"
         case .raccoon: return "Raccoon"
+        case .zai: return "Z.ai"
         case .unsupported: return AppLocalized("Unsupported")
         }
     }
@@ -1317,6 +1336,8 @@ struct AddProviderView: View {
         case .trae, .traeIntl:
             return [.oauth]
         case .raccoon:
+            return [.oauth]
+        case .zai:
             return [.oauth]
         case .openAIResponses, .gemini:
             return [.apiKey]
@@ -1361,6 +1382,8 @@ struct AddProviderView: View {
             return AppLocalized("Sign in with your Trae account. Trae login grants access to its model catalog.")
         case (.raccoon, _):
             return AppLocalized("Sign in with your Raccoon account. Raccoon login grants access to its model catalog.")
+        case (.zai, _):
+            return AppLocalized("Sign in with your Z.ai / GLM Coding Plan account. Z.ai login grants access to its GLM model catalog.")
         case (.unsupported, _):
             return AppLocalized("This provider isn't supported in this app version.")
         }
@@ -1408,6 +1431,9 @@ struct AddProviderView: View {
         case .raccoon:
             Image(systemName: "pawprint.fill")
                 .foregroundStyle(.pink)
+        case .zai:
+            Image(systemName: "brain.fill")
+                .foregroundStyle(.teal)
         case .unsupported:
             Image(systemName: "questionmark.circle")
                 .foregroundStyle(.gray)
@@ -1429,6 +1455,7 @@ struct AddProviderView: View {
         case .trae: return .indigo
         case .traeIntl: return .indigo
         case .raccoon: return .pink
+        case .zai: return .teal
         case .unsupported: return .gray
         }
     }

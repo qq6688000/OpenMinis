@@ -80,6 +80,7 @@ enum QuotaVendorDetector {
         case .workBuddy: return .unknown
         case .trae, .traeIntl: return .unknown
         case .raccoon: return .unknown
+        case .zai: return .unknown
         case .unsupported: return .unknown
         }
     }

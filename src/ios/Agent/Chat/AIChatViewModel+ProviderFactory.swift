@@ -146,6 +146,9 @@ extension AIChatViewModel {
         case .raccoon:
             return OpenAIAgentProvider(
                 provider: LLMProviderFactory.makeRaccoonProvider(instance: instance, model: entry.model))
+        case .zai:
+            return OpenAIAgentProvider(
+                provider: LLMProviderFactory.makeZaiProvider(instance: instance, model: entry.model))
         case .unsupported:
             logger.error("\(instance.providerType) has no agent provider; returning placeholder")
             return AnthropicAgentProvider(provider: AnthropicProvider(apiKey: "", model: entry.model))

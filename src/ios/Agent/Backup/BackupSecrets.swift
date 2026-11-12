@@ -204,6 +204,9 @@ enum BackupSecretsCollector {
         case .raccoon:
             return ProviderKeychainHelper.loadOAuthToken(instanceId: id, as: RaccoonTokenStorage.self)
                 .flatMap { try? JSONEncoder().encode($0) }
+        case .zai:
+            return ProviderKeychainHelper.loadOAuthToken(instanceId: id, as: ZaiTokenStorage.self)
+                .flatMap { try? JSONEncoder().encode($0) }
         case .antigravity, .openAIResponses, .openRouter, .unsupported:
             return nil
         }

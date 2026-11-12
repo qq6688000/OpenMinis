@@ -855,6 +855,10 @@ struct LLMModel: Equatable, Hashable, Identifiable, Sendable, Codable {
             supportedModalities: ProviderType.raccoon.defaultModality,
             supportedAuth: [.oauth]
         ),
+        "Zai": ModelCapabilities(
+            supportedModalities: ProviderType.zai.defaultModality,
+            supportedAuth: [.oauth]
+        ),
     ]
 
     /// Default capabilities when the provider is unknown.

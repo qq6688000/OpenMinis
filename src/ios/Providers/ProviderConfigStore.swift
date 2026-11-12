@@ -3329,6 +3329,11 @@ final class ProviderConfigStore: ObservableObject {
             let token = try await RaccoonOAuthManager.shared.validAccessToken(instanceId: instance.id)
             let site = instance.raccoonSite ?? .work
             return await RaccoonModelsAPI.fetchModels(accessToken: token, orgCode: "", site: site)
+        case (.zai, _):
+            // [T-zai] Z.ai 没有已知可用的 /models 发现端点（无 zai-models.json），
+            // 先校验 token 有效性，模型列表直接走内置 GLM 系列占位。
+            _ = try await ZaiOAuthManager.shared.validAccessToken(instanceId: instance.id)
+            return ZaiModelsAPI.allModels
         case (.unsupported, _):
             // Synced from a newer build — can't fetch; keep whatever's stored.
             return []
@@ -3518,6 +3523,7 @@ final class ProviderConfigStore: ObservableObject {
         case .workBuddy: return (instance.workBuddySite ?? .china).endpoint
         case .trae, .traeIntl: return (instance.traeSite ?? .china).remoteBase
         case .raccoon: return (instance.raccoonSite ?? .work).apiBase
+        case .zai: return (instance.zaiSite ?? .china).chatBaseURL
         case .unsupported: return nil // synced from newer build
         }
     }

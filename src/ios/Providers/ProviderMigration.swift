@@ -100,6 +100,9 @@ enum ProviderMigration {
             case .raccoon:
                 // [T-raccoon] New provider; no legacy singleton tokens to migrate.
                 break
+            case .zai:
+                // [T-zai] New provider; no legacy singleton tokens to migrate.
+                break
             case .unsupported:
                 break
             }
