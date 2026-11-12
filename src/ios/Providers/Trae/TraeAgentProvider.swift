@@ -61,9 +61,9 @@ final class TraeAgentProvider: AgentProvider {
                 }
             }
 
-            // Tool results answer the previous assistant turn.
-            out.append(contentsOf: results)
-
+            // Order matters: the assistant turn carrying `function_call` must
+            // come FIRST, then its `tool` results. Reversing them leaves the
+            // call unpaired and Trae silently stops responding.
             if message.role == .user {
                 if !text.isEmpty {
                     out.append(["role": "user", "content": textBlocks(text)])
@@ -73,6 +73,7 @@ final class TraeAgentProvider: AgentProvider {
                 if !calls.isEmpty { entry["function_call"] = calls }
                 out.append(entry)
             }
+            out.append(contentsOf: results)
         }
         return out
     }
@@ -122,6 +123,10 @@ final class TraeAgentProvider: AgentProvider {
     ) async throws -> AsyncThrowingStream<AgentStreamEvent, Error> {
         let converted = Self.convertMessages(messages)
         let toolSchemas = tools.isEmpty ? nil : Self.convertTools(tools)
+        logger.info("[TraeWire] request messages(\(converted.count)): \(String(describing: converted.map { ($0["role"] as? String) ?? "?" }))")
+        if let last = converted.last {
+            logger.info("[TraeWire] last message keys: \(String(describing: Array(last.keys)))")
+        }
 
         let raw = try await provider.streamChat(
             messages: converted,
