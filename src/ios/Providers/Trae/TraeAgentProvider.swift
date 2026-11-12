@@ -17,6 +17,11 @@ final class TraeAgentProvider: AgentProvider {
     var model: LLMModel { provider.model }
     var defaultMaxTokens: Int { 16_384 }
 
+    /// Trae's reasoning models can think for a minute or more before the
+    /// first token, which brushes against the 120s default watchdog. Allow
+    /// more idle time so a slow-but-alive stream isn't cut off.
+    var responseIdleTimeout: TimeInterval { 240 }
+
     init(provider: TraeProvider) {
         self.provider = provider
     }
@@ -140,6 +145,8 @@ final class TraeAgentProvider: AgentProvider {
                 do {
                     for try await event in raw {
                         switch event {
+                        case .reasoning(let text):
+                            continuation.yield(.thinkingDelta(text))
                         case .text(let text):
                             if !emittedTextStart {
                                 continuation.yield(.contentBlockStart(.text))

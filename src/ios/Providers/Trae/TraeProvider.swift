@@ -57,6 +57,8 @@ final class TraeProvider: LLMProvider {
     /// `streamMessage` (the plain-text `LLMProvider` path) wraps this.
     enum ChatEvent: Sendable {
         case text(String)
+        /// Model reasoning; shown in the thinking UI, not as answer text.
+        case reasoning(String)
         case toolCall(TraeToolCall)
         case usage(LLMUsage)
         case finished(AgentStopReason)
@@ -165,7 +167,7 @@ final class TraeProvider: LLMProvider {
                 yield(.finished(hadCalls ? .toolUse : Self.agentStopReason(root["finish_reason"] as? String)))
             case "output":
                 if let reasoning = root["reasoning_content"] as? String, !reasoning.isEmpty {
-                    yield(.text(reasoning))
+                    yield(.reasoning(reasoning))
                 }
                 if let response = root["response"] as? String, !response.isEmpty {
                     yield(.text(response))
