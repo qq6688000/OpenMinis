@@ -142,27 +142,52 @@ final class TraeAgentProvider: AgentProvider {
         return AsyncThrowingStream { continuation in
             let task = Task {
                 var emittedTextStart = false
-                // Repetition guard on the ACCUMULATED answer. DeepSeek-V4
-                // occasionally collapses on long arithmetic-heavy turns: it
-                // restates the same paragraph verbatim (often after emitting a
-                // stray token such as `</thread>`), burning the whole turn and
-                // filling the context with duplicates. Sample a fixed-size
-                // tail each time the answer grows past the next bucket; three
-                // identical samples in a row means a loop.
+                // Repetition guard. DeepSeek-V4 collapses on long
+                // arithmetic-heavy turns: after a stray token (typically
+                // `</thread>`) it restates the same paragraph, over and over,
+                // until the turn burns out. Two shapes need catching:
+                //   1. one tiny fragment repeated (the stray token itself)
+                //   2. a longer paragraph repeated verbatim
+                // A tail comparison misses (1) because the loop interleaves
+                // other text, so count fragment repeats in a sliding window.
+                var recentFragments: [String] = []
+                var fragmentCounts: [String: Int] = [:]
                 var accumulated = ""
-                var repeats = 0
-                var lastSample = ""
-                var nextSampleAt = 400
-                func checkRepeat(_ chunk: String) {
+                var lastTail = ""
+                var tailRepeats = 0
+
+                /// Returns a human-readable reason when the model is looping.
+                func loopReason() -> String? {
+                    if let (fragment, count) = fragmentCounts.max(by: { $0.value < $1.value }),
+                       count >= 5, fragment.count >= 3 {
+                        return "fragment \(fragment.prefix(40)) ×\(count)"
+                    }
+                    if accumulated.count >= 600 {
+                        let tail = String(accumulated.suffix(300))
+                        if tail == lastTail {
+                            tailRepeats += 1
+                            if tailRepeats >= 2 { return "paragraph repeated \(tailRepeats + 1)×" }
+                        } else {
+                            tailRepeats = 0
+                            lastTail = tail
+                        }
+                    }
+                    return nil
+                }
+
+                func note(_ chunk: String) {
                     accumulated += chunk
-                    guard accumulated.count >= nextSampleAt else { return }
-                    nextSampleAt += 200
-                    let tail = String(accumulated.suffix(200))
-                    if tail == lastSample {
-                        repeats += 1
-                    } else {
-                        repeats = 0
-                        lastSample = tail
+                    let key = chunk.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard key.count >= 3 else { return }
+                    recentFragments.append(key)
+                    fragmentCounts[key, default: 0] += 1
+                    if recentFragments.count > 40 {
+                        let dropped = recentFragments.removeFirst()
+                        if let n = fragmentCounts[dropped], n <= 1 {
+                            fragmentCounts[dropped] = nil
+                        } else {
+                            fragmentCounts[dropped] = n - 1
+                        }
                     }
                 }
                 do {
@@ -171,11 +196,11 @@ final class TraeAgentProvider: AgentProvider {
                         case .reasoning(let text):
                             continuation.yield(.thinkingDelta(text))
                         case .text(let text):
-                            checkRepeat(text)
-                            if repeats >= 2 {
-                                logger.warning("[TraeWire] repetition loop on accumulated text — aborting turn")
+                            note(text)
+                            if let reason = loopReason() {
+                                logger.warning("[TraeWire] repetition loop (\(reason)) — aborting turn")
                                 throw LLMError.providerError(
-                                    message: "The model started repeating itself (stuck in a loop). Stopped this turn to save tokens — try asking it to compute step by step with a tool instead of in its head.")
+                                    message: "The model started repeating itself (\(reason)). Stopped this turn to save tokens — try asking it to compute with a tool instead of in its head.")
                             }
                             if !emittedTextStart {
                                 continuation.yield(.contentBlockStart(.text))
