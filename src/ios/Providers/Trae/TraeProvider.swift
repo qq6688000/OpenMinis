@@ -1,4 +1,7 @@
 import Foundation
+import os.log
+
+private let wireLogger = AppLogger(category: "TraeWire")
 
 // [T-trae] TraeProvider — implements LLMProvider for ByteDance's Trae IDE.
 //
@@ -145,6 +148,7 @@ final class TraeProvider: LLMProvider {
                 }
                 if let calls = root["tool_calls"] as? [[String: Any]] {
                     for call in calls {
+                        wireLogger.info("[TraeWire] tool_call raw: \(String(describing: call))")
                         guard let parsed = Self.toolCall(call) else { continue }
                         sawToolCall = true
                         yield(.toolCall(parsed))
@@ -162,20 +166,44 @@ final class TraeProvider: LLMProvider {
     }
 
     static func toolCall(_ call: [String: Any]) -> TraeToolCall? {
-        let function = (call["function_call"] ?? call["function"]) as? [String: Any] ?? call
-        let name = function["name"] as? String ?? call["name"] as? String ?? ""
-        guard !name.isEmpty else { return nil }
-        let arguments: String
-        if let text = function["arguments"] as? String {
-            arguments = text
-        } else if let object = function["arguments"],
-                  let data = try? JSONSerialization.data(withJSONObject: object),
-                  let text = String(data: data, encoding: .utf8) {
-            arguments = text
-        } else {
-            arguments = "{}"
+        // Trae has used several shapes: `{function_call:{name,arguments}}`,
+        // `{function:{name,arguments}}`, and flat `{name, arguments}`.
+        let candidates: [[String: Any]] = [
+            call["function_call"] as? [String: Any],
+            call["function"] as? [String: Any],
+            call,
+        ].compactMap { $0 }
+
+        func firstString(_ keys: [String]) -> String? {
+            for dict in candidates {
+                for key in keys {
+                    if let v = dict[key] as? String, !v.isEmpty { return v }
+                }
+            }
+            return nil
         }
-        let id = call["id"] as? String ?? function["id"] as? String ?? ""
+
+        guard let name = firstString(["name", "tool_name", "function_name"]), !name.isEmpty else { return nil }
+
+        var arguments: String = "{}"
+        for dict in candidates {
+            if let text = dict["arguments"] as? String, !text.isEmpty {
+                arguments = text
+                break
+            }
+            if let object = dict["arguments"] ?? dict["parameters"] ?? dict["input"],
+               !(object is NSNull),
+               JSONSerialization.isValidJSONObject(object),
+               let data = try? JSONSerialization.data(withJSONObject: object),
+               let text = String(data: data, encoding: .utf8) {
+                arguments = text
+                break
+            }
+        }
+        if arguments == "{}" {
+            wireLogger.info("[TraeWire] tool_call with empty arguments: \(String(describing: call))")
+        }
+        let id = firstString(["id", "call_id", "tool_call_id"]) ?? ""
         return TraeToolCall(id: id, name: name, arguments: arguments)
     }
 
