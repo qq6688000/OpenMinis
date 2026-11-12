@@ -149,7 +149,16 @@ final class TraeAgentProvider: AgentProvider {
                         case .toolCall(let call):
                             let callId = call.id.isEmpty ? UUID().uuidString : call.id
                             continuation.yield(.contentBlockStart(.toolUse(id: callId, name: call.name)))
-                            let args = (try? JSONSerialization.jsonObject(with: Data(call.arguments.utf8))) as? [String: Any] ?? [:]
+                            var args: [String: Any] = [:]
+                            if let parsed = (try? JSONSerialization.jsonObject(with: Data(call.arguments.utf8))) as? [String: Any] {
+                                args = parsed
+                            } else {
+                                logger.info("[TraeWire] tool args unparsable(\(call.name)) raw=\(call.arguments.prefix(300))")
+                                // Never hand the executor an empty object: fall
+                                // back to the raw text so the failure names the
+                                // real problem instead of "arguments empty".
+                                args = ["_raw": call.arguments]
+                            }
                             continuation.yield(.toolCallComplete(
                                 id: callId,
                                 name: call.name,

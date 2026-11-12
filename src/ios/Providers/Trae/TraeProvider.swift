@@ -157,8 +157,12 @@ final class TraeProvider: LLMProvider {
             case "token_usage":
                 if let usage = usage(from: root) { yield(.usage(usage)) }
             case "done":
+                let hadCalls = !pending.isEmpty
                 flushCalls()
-                yield(.finished(Self.agentStopReason(root["finish_reason"] as? String)))
+                // A turn that streamed tool calls is a tool-use turn even when
+                // Trae labels its finish reason "stop" — otherwise the agent
+                // loop ends the turn without ever running the tool.
+                yield(.finished(hadCalls ? .toolUse : Self.agentStopReason(root["finish_reason"] as? String)))
             case "output":
                 if let reasoning = root["reasoning_content"] as? String, !reasoning.isEmpty {
                     yield(.text(reasoning))
