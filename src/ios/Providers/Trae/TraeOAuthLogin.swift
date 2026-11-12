@@ -592,13 +592,17 @@ enum TraeOAuthClient {
     static func deviceInfo(machineID: String, deviceID: String, profile: TraeLoginProfile.Profile) -> [String: Any] {
         [
             "DeviceID": deviceID,
+            "MachineID": machineID,
+            "PlatformCode": "IDE_PC",
+            "DeviceType": "1",
             "DeviceName": "iPhone",
+            "DeviceModel": profile.deviceBrand.isEmpty ? "Apple" : profile.deviceBrand,
+            "ClientVersion": profile.appVersion,
+            "DevicePublicKey": P256.Signing.PrivateKey().publicKey.pemRepresentation,
             "DeviceBrand": profile.deviceBrand.isEmpty ? "Apple" : profile.deviceBrand,
-            "DeviceModel": "iPhone",
+            "DeviceCPU": "",
             "OSInfo": profile.osInfo,
             "OSVersion": profile.osVersion,
-            "PlatformCode": "IDE_PC",
-            "MachineID": machineID,
         ]
     }
 
