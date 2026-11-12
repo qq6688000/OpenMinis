@@ -108,9 +108,28 @@ final class TraeProvider: LLMProvider {
     }
 
     /// Parses Trae's SSE, surfacing tool calls as their own events.
+    ///
+    /// Tool calls arrive in FRAGMENTS: the first frame carries the id and
+    /// name with empty arguments, then each later frame appends another
+    /// chunk of the JSON arguments under the same `index`. Emitting per
+    /// frame yields dozens of empty-argument calls, so fragments are
+    /// accumulated per index and only emitted when the turn closes.
     static func parseChatSSE(data: Data, yield: @escaping (ChatEvent) -> Void) throws {
         let text = String(data: data, encoding: .utf8) ?? ""
-        var sawToolCall = false
+        var pending: [Int: TraeToolCall] = [:]
+        var order: [Int] = []
+
+        func flushCalls() {
+            for index in order {
+                guard let call = pending[index] else { continue }
+                let args = call.arguments.trimmingCharacters(in: .whitespacesAndNewlines)
+                if args.isEmpty { continue }
+                yield(.toolCall(call))
+            }
+            pending.removeAll()
+            order.removeAll()
+        }
+
         for frame in text.components(separatedBy: "\n\n") {
             var event = "output"
             var payload = ""
@@ -138,6 +157,7 @@ final class TraeProvider: LLMProvider {
             case "token_usage":
                 if let usage = usage(from: root) { yield(.usage(usage)) }
             case "done":
+                flushCalls()
                 yield(.finished(Self.agentStopReason(root["finish_reason"] as? String)))
             case "output":
                 if let reasoning = root["reasoning_content"] as? String, !reasoning.isEmpty {
@@ -148,64 +168,45 @@ final class TraeProvider: LLMProvider {
                 }
                 if let calls = root["tool_calls"] as? [[String: Any]] {
                     for call in calls {
-                        wireLogger.info("[TraeWire] tool_call raw: \(String(describing: call))")
-                        guard let parsed = Self.toolCall(call) else { continue }
-                        sawToolCall = true
-                        yield(.toolCall(parsed))
+                        let index = (call["index"] as? NSNumber)?.intValue ?? 0
+                        let fragment = Self.toolCallFragment(call)
+                        if var existing = pending[index] {
+                            if !fragment.id.isEmpty { existing.id = fragment.id }
+                            if !fragment.name.isEmpty { existing.name = fragment.name }
+                            existing.arguments += fragment.arguments
+                            pending[index] = existing
+                        } else {
+                            if !order.contains(index) { order.append(index) }
+                            pending[index] = fragment
+                        }
                     }
                 }
             default:
                 break
             }
         }
-        if sawToolCall {
-            // The done frame may report "stop"; a turn with tool calls is a
-            // tool-use turn regardless.
-            yield(.finished(.toolUse))
-        }
+
+        // Stream ended without a done frame: still deliver what accumulated.
+        flushCalls()
     }
 
-    static func toolCall(_ call: [String: Any]) -> TraeToolCall? {
-        // Trae has used several shapes: `{function_call:{name,arguments}}`,
-        // `{function:{name,arguments}}`, and flat `{name, arguments}`.
-        let candidates: [[String: Any]] = [
-            call["function_call"] as? [String: Any],
-            call["function"] as? [String: Any],
-            call,
-        ].compactMap { $0 }
-
-        func firstString(_ keys: [String]) -> String? {
-            for dict in candidates {
-                for key in keys {
-                    if let v = dict[key] as? String, !v.isEmpty { return v }
-                }
-            }
-            return nil
+    /// One fragment of a streamed tool call. `name` and `id` only appear on
+    /// the first frame; `arguments` is a JSON substring on every frame.
+    static func toolCallFragment(_ call: [String: Any]) -> TraeToolCall {
+        let inner: [String: Any] = (call["function_call"] as? [String: Any])
+            ?? (call["function"] as? [String: Any])
+            ?? call
+        func str(_ key: String) -> String {
+            (inner[key] as? String) ?? (call[key] as? String) ?? ""
         }
-
-        guard let name = firstString(["name", "tool_name", "function_name"]), !name.isEmpty else { return nil }
-
-        var arguments: String = "{}"
-        for dict in candidates {
-            if let text = dict["arguments"] as? String, !text.isEmpty {
-                arguments = text
-                break
-            }
-            if let object = dict["arguments"] ?? dict["parameters"] ?? dict["input"],
-               !(object is NSNull),
-               JSONSerialization.isValidJSONObject(object),
-               let data = try? JSONSerialization.data(withJSONObject: object),
-               let text = String(data: data, encoding: .utf8) {
-                arguments = text
-                break
-            }
+        var args = str("arguments")
+        if args.isEmpty {
+            // Some frames put the fragment under `partial_arguments`.
+            args = str("partial_arguments")
         }
-        if arguments == "{}" {
-            wireLogger.info("[TraeWire] tool_call with empty arguments: \(String(describing: call))")
-        }
-        let id = firstString(["id", "call_id", "tool_call_id"]) ?? ""
-        return TraeToolCall(id: id, name: name, arguments: arguments)
+        return TraeToolCall(id: str("id"), name: str("name"), arguments: args)
     }
+
 
     func streamMessage(
         messages: [LLMMessage],
