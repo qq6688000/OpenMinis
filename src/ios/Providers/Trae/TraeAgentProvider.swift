@@ -142,12 +142,41 @@ final class TraeAgentProvider: AgentProvider {
         return AsyncThrowingStream { continuation in
             let task = Task {
                 var emittedTextStart = false
+                // Repetition guard on the ACCUMULATED answer. DeepSeek-V4
+                // occasionally collapses on long arithmetic-heavy turns: it
+                // restates the same paragraph verbatim (often after emitting a
+                // stray token such as `</thread>`), burning the whole turn and
+                // filling the context with duplicates. Sample a fixed-size
+                // tail each time the answer grows past the next bucket; three
+                // identical samples in a row means a loop.
+                var accumulated = ""
+                var repeats = 0
+                var lastSample = ""
+                var nextSampleAt = 400
+                func checkRepeat(_ chunk: String) {
+                    accumulated += chunk
+                    guard accumulated.count >= nextSampleAt else { return }
+                    nextSampleAt += 200
+                    let tail = String(accumulated.suffix(200))
+                    if tail == lastSample {
+                        repeats += 1
+                    } else {
+                        repeats = 0
+                        lastSample = tail
+                    }
+                }
                 do {
                     for try await event in raw {
                         switch event {
                         case .reasoning(let text):
                             continuation.yield(.thinkingDelta(text))
                         case .text(let text):
+                            checkRepeat(text)
+                            if repeats >= 2 {
+                                logger.warning("[TraeWire] repetition loop on accumulated text — aborting turn")
+                                throw LLMError.providerError(
+                                    message: "The model started repeating itself (stuck in a loop). Stopped this turn to save tokens — try asking it to compute step by step with a tool instead of in its head.")
+                            }
                             if !emittedTextStart {
                                 continuation.yield(.contentBlockStart(.text))
                                 emittedTextStart = true

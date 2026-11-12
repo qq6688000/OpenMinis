@@ -129,6 +129,7 @@ final class TraeProvider: LLMProvider {
         var pending: [Int: TraeToolCall] = [:]
         var order: [Int] = []
 
+
         func flushCalls() {
             for index in order {
                 guard let call = pending[index] else { continue }
