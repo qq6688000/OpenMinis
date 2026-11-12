@@ -36,6 +36,9 @@ struct TraeLoginSheet: View {
                     ProgressView()
                     Text(AppLocalized("Contacting Trae…"))
                         .foregroundStyle(.secondary)
+                    Text("BUILD v9-safari")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
                 case .awaitingUser:
                     Text(AppLocalized("1. Tap “Open sign-in page”\n2. Sign in to \(site.displayName) in the browser"))
                         .font(.subheadline)
@@ -108,14 +111,21 @@ struct TraeLoginSheet: View {
             }
         }
     }
-
     private func presentSafari(_ url: URL) {
-        guard let scene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene }).first,
-              let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else { return }
-        var topVC = root
-        while let presented = topVC.presentedViewController { topVC = presented }
-        topVC.present(SFSafariViewController(url: url), animated: true)
+        // Present from the window's root-most presenter: presenting from
+        // inside the SwiftUI sheet can stack Safari behind it.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            guard let scene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first(where: { $0.activationState == .foregroundActive }) ?? UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first,
+                  let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else { return }
+            var presenter = root
+            while let presented = presenter.presentedViewController {
+                if presented is SFSafariViewController { return }
+                presenter = presented
+            }
+            presenter.present(SFSafariViewController(url: url), animated: true)
+        }
     }
 
     private func finish(_ success: Bool) {
