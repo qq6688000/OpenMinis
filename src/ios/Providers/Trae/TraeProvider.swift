@@ -95,7 +95,13 @@ final class TraeProvider: LLMProvider {
     // MARK: - URL / body
 
     func chatURL() throws -> URL {
-        guard let url = URL(string: site.remoteBase + "/api/agent/v3/llm_utils_chat") else {
+        // `remoteBase` already ends in `/api/remote/v1`; the agent chat path
+        // hangs off the bare origin, so strip the suffix before appending.
+        var base = site.remoteBase
+        if let range = base.range(of: "/api/remote/v1") {
+            base = String(base[base.startIndex..<range.lowerBound])
+        }
+        guard let url = URL(string: base + "/api/agent/v3/llm_utils_chat") else {
             throw LLMError.providerError(message: "Trae: invalid chat URL")
         }
         return url
