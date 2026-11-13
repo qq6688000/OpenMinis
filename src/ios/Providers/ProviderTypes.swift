@@ -43,16 +43,6 @@ enum ProviderType: String, Codable, CaseIterable, Hashable, Sendable {
     /// `{apiBase}/api/web/llm/v2/chat/completions`，Bearer token +
     /// `X-Org-Code` 认证，登录走浏览器。走 OpenAIProvider。
     case raccoon
-    /// Z.ai（智谱 GLM Coding Plan）。国内版走 CLI 设备码登录流
-    ///（`cli/init` → 浏览器/扫码 → `cli/poll` 拿 accessToken），聊天走
-    /// OpenAI 兼容端点 `{chatBaseURL}/chat/completions`，Bearer + `zcodeAppVersion`。
-    /// 站点由 `ProviderInstance.zaiSite` 指定（仅 china 国内版）。
-    case zai
-    /// Qoder（阿里巴巴 Qoder IDE，Trae 孪生）。与 Trae 共用 OAuth 基类逻辑
-    /// （PKCE loopback + ExchangeToken），聊天同为 `llm_utils_chat` SSE 端点，
-    /// 但 host / clientID / app_id 不同。站点由 `ProviderInstance.qoderSite`
-    /// 指定（仅 china 国内版）。
-    case qoder
     /// Sentinel for a provider type this app build doesn't recognize — e.g. a
     /// NEWER build synced an instance whose `provider_type` string isn't a known
     /// case here. We DECODE to this instead of throwing/dropping, so the instance
@@ -82,8 +72,6 @@ enum ProviderType: String, Codable, CaseIterable, Hashable, Sendable {
         case .trae: return "Trae"
         case .traeIntl: return "Trae (Intl)"
         case .raccoon: return "Raccoon"
-        case .zai: return "Z.ai"
-        case .qoder: return "Qoder"
         case .unsupported: return "Unsupported"
         }
     }
@@ -121,13 +109,6 @@ enum ProviderType: String, Codable, CaseIterable, Hashable, Sendable {
         case .raccoon:
             // Raccoon 目录来自 `model_catalog`。
             return true
-        case .zai:
-            // Z.ai 目录先用内置 GLM 系列占位（无 zai-models.json）；登录后
-            // 若 `/models` 可用可开启，目前回退内置。
-            return false
-        case .qoder:
-            // Qoder 目录来自内置 qoder-models.json（19 个模型）。
-            return false
         case .openAI:
             // OpenAIModelsAPI.fetchModelsOAuth() is a compiled-in list.
             return false
@@ -155,8 +136,6 @@ enum ProviderType: String, Codable, CaseIterable, Hashable, Sendable {
         case .workBuddy: return WorkBuddyModelsAPI.allModels
         case .trae, .traeIntl: return TraeModelsAPI.allModels
         case .raccoon: return RaccoonModelsAPI.allModels
-        case .zai: return ZaiModelsAPI.allModels
-        case .qoder: return QoderModelsAPI.allModels
         // Deliberately empty: the task requires the list come from the server
         // (`model_picker_enabled`), never a compiled-in guess that would go
         // stale and offer models the account cannot use.
@@ -193,10 +172,6 @@ enum ProviderType: String, Codable, CaseIterable, Hashable, Sendable {
             return AppLocalized("Sign in with your Trae account in the browser.")
         case .raccoon:
             return AppLocalized("Sign in with your Raccoon account in the browser.")
-        case .zai:
-            return AppLocalized("Sign in with your Z.ai / GLM Coding Plan account.")
-        case .qoder:
-            return AppLocalized("Sign in with your Qoder account in the browser.")
         case .antigravity:
             return AppLocalized("\(builtInModels.count) built-in models")
         case .unsupported:
@@ -219,8 +194,6 @@ enum ProviderType: String, Codable, CaseIterable, Hashable, Sendable {
         case .workBuddy: return .vision
         case .trae, .traeIntl: return .vision
         case .raccoon: return .vision
-        case .zai: return .vision
-        case .qoder: return .vision
         case .unsupported: return .vision
         }
     }
@@ -339,76 +312,6 @@ enum RaccoonSite: String, Codable, CaseIterable, Hashable, Sendable {
     }
 }
 
-/// [T-zai] Z.ai（智谱 GLM Coding Plan）站点。当前仅国内版 `china`。
-enum ZaiSite: String, Codable, CaseIterable, Hashable, Sendable {
-    case china = "china"
-
-    var displayName: String { "Z.ai CN" }
-
-    /// 登录/开放平台基座（智谱国内站 open.bigmodel.cn）。
-    var zcodeBaseURL: String { "https://open.bigmodel.cn" }
-
-    /// GLM Coding Plan chat 基座（OpenAI Chat Completions 兼容协议）。
-    /// 国内官方文档：`https://open.bigmodel.cn/api/coding/paas/v4`。
-    var chatBaseURL: String { "https://open.bigmodel.cn/api/coding/paas/v4" }
-
-    /// Anthropic Message 兼容协议基座（GLM-5.3 系列推荐，Claude Code 同款）。
-    var anthropicBaseURL: String { "https://open.bigmodel.cn/api/anthropic" }
-
-    /// OpenAI Responses 协议基座。
-    var responsesBaseURL: String { "https://open.bigmodel.cn/api/v1" }
-
-    /// CLI init 的 `provider` 字段（"zai" 国内版 / "bigmodel" 暂不用）。
-    var initProvider: String { "zai" }
-
-    var host: String { URL(string: chatBaseURL)?.host ?? "" }
-
-    static func fromRaw(_ raw: String?) -> ZaiSite {
-        raw.flatMap(ZaiSite.init(rawValue:)) ?? .china
-    }
-}
-
-/// [T-qoder] Qoder（阿里巴巴 Qoder IDE，Trae 孪生）站点。当前仅国内版 `china`。
-///
-/// 登录与 Trae 共用同一 `OAuthLogin` 基类（PKCE loopback + ExchangeToken），
-/// 但 host / clientID / app_id 不同；chat 端点为专用 SSE
-/// `/api/agent/v3/llm_utils_chat`（与 Trae 同路径），需 `machineId` 头。
-enum QoderSite: String, Codable, CaseIterable, Hashable, Sendable {
-    case china = "china"
-
-    var displayName: String { "Qoder CN" }
-
-    /// 网关 origin（chat / agent 端点挂在其下）。
-    var gatewayBase: String { "https://gateway.qoder.com.cn" }
-
-    /// 对外 API 基座（模型目录 `algo/api/v2/model/list`）。
-    var openAPIBase: String { "https://openapi.qoder.com.cn" }
-
-    /// 登录授权页 web 基座。
-    var webBase: String { "https://qoder.cn" }
-
-    /// ExchangeToken 的 host。
-    var oauthHost: String { "https://gateway.qoder.com.cn" }
-
-    /// OAuth clientID（QoderSite 显式带 client，与 Trae 的 ono9krqynydwx5 不同）。
-    /// 【待实测】若 4001/401，优先核对此处。
-    var clientID: String { "qoder-vscode" }
-
-    /// agent chat 的 `app_id`。【待实测】Qoder 若拒答可核对。
-    var appID: String { "6eefa01c-1036-4c7e-9ca5-d891f63bfcd8" }
-
-    /// IDE 版本（与 Trae 同套版本号，Qoder 是 Trae 同源分发）。
-    var ideVersion: String { "0.1.61" }
-    var ideVersionCode: String { "20260820" }
-    var userAgent: String { "Qoder/0.1.61" }
-
-    var host: String { URL(string: gatewayBase)?.host ?? "" }
-
-    static func fromRaw(_ raw: String?) -> QoderSite {
-        raw.flatMap(QoderSite.init(rawValue:)) ?? .china
-    }
-}
-
 /// WorkBuddy 账号凭据，按实例存 Keychain（`ProviderKeychainHelper`）。
 struct WorkBuddyTokenStorage: Codable, Equatable {
     var accessToken: String
@@ -503,69 +406,6 @@ enum RaccoonModelsAPI {
         // 完整实现见 RaccoonModelsFetcher（后续）；目前回退内置清单。
         allModels
     }
-}
-
-/// [T-zai] Z.ai 内置模型目录（回退；无 zai-models.json，先占位 GLM/MiniMax）。
-enum ZaiModelsAPI {
-    static let defaultModelId = "glm-5.3"
-
-    static let allModels: [LLMModel] = [
-        LLMModel(id: "glm-5.3", displayName: "GLM 5.3", provider: "Zai"),
-        LLMModel(id: "glm-5.3-flash", displayName: "GLM 5.3 Flash", provider: "Zai"),
-        LLMModel(id: "minimax-m3", displayName: "MiniMax M3", provider: "Zai"),
-    ]
-}
-
-/// [T-qoder] Qoder 内置模型目录（来自 kwwk 的 qoder-models.json，19 个模型，
-/// api=qoder-chat，contextWindow 1_000_000，maxTokens 32_000）。
-enum QoderModelsAPI {
-    static let defaultModelId = "ultimate"
-
-    static let allModels: [LLMModel] = [
-        LLMModel(id: "ultimate", displayName: "Ultimate", provider: "Qoder"),
-        LLMModel(id: "performance", displayName: "Performance", provider: "Qoder"),
-        LLMModel(id: "efficient", displayName: "Efficient", provider: "Qoder"),
-        LLMModel(id: "fast", displayName: "Fast", provider: "Qoder"),
-        LLMModel(id: "smodel", displayName: "Sonus", provider: "Qoder"),
-        LLMModel(id: "cmodel", displayName: "Cantus", provider: "Qoder"),
-        LLMModel(id: "gmodel", displayName: "GLM-5.3", provider: "Qoder"),
-        LLMModel(id: "gfmodel", displayName: "GLM-5.3-Flash", provider: "Qoder"),
-        LLMModel(id: "gm51model", displayName: "GLM-5.2", provider: "Qoder"),
-        LLMModel(id: "kmodel", displayName: "Kimi-K2.8-Preview", provider: "Qoder"),
-        LLMModel(id: "kmodel_latest", displayName: "Kimi-K3", provider: "Qoder"),
-        LLMModel(id: "mmodel", displayName: "MiniMax-M3", provider: "Qoder"),
-        LLMModel(id: "dmodel", displayName: "DeepSeek-V4-Pro", provider: "Qoder"),
-        LLMModel(id: "dfmodel", displayName: "DeepSeek-Flash", provider: "Qoder"),
-        LLMModel(id: "qmodel", displayName: "Qwen3.7-Plus", provider: "Qoder"),
-        LLMModel(id: "qmodel_latest", displayName: "Qwen3.7-Max", provider: "Qoder"),
-        LLMModel(id: "qmodel_38max", displayName: "Qwen3.8-Max", provider: "Qoder"),
-        LLMModel(id: "qfmodel", displayName: "Qwen3.8-Flash", provider: "Qoder"),
-        LLMModel(id: "q37fmodel", displayName: "Qwen3.7-Flash", provider: "Qoder"),
-    ]
-}
-
-/// [T-qoder] Qoder 账号凭据，按实例存 Keychain（含 machineId 设备指纹）。
-struct QoderTokenStorage: Codable, Equatable {
-    var accessToken: String
-    var refreshToken: String
-    var expireDate: Date?
-    var userID: String
-    var machineID: String
-    var deviceID: String
-    var oauthHost: String?
-    var accountName: String
-    var site: String
-    var lastRefresh: Date
-}
-
-/// [T-zai] Z.ai 账号凭据，按实例存 Keychain。
-struct ZaiTokenStorage: Codable, Equatable {
-    var accessToken: String
-    var refreshToken: String
-    var accountName: String
-    var site: String
-    var expireDate: Date?
-    var lastRefresh: Date
 }
 
 /// [T-raccoon] Raccoon 账号凭据，按实例存 Keychain。
@@ -972,239 +812,4 @@ enum WorkBuddyAPI {
         var errorDescription: String? { message }
     }
 }
-
-// MARK: - [T-zai] Z.ai OAuth (CLI init/poll flow)
-
-/// Z.ai（智谱 GLM Coding Plan）登录与 token 管理。
-///
-/// 复刻 kwwk 的 `KWWKAuth.ZaiOAuth`：CLI 设备码流 —— 先
-/// `POST {zcode}/api/v1/oauth/cli/init` 拿到 flowId/pollToken/授权页，UI 在
-/// 浏览器（或扫码）打开 `authorize_url`（回调 `zcode://oauth/callback`），
-/// 再 `GET {zcode}/api/v1/oauth/cli/poll/{flowId}` 轮询直到拿到 accessToken。
-/// 不需要本地 loopback server，token 直接由 poll 返回，最接近 Kimi 设备码模式。
-///
-/// 结构与 WorkBuddy/Raccoon 一致：按实例存 Keychain，访问 token 不刷新
-/// （Z.ai accessToken 当前视为长期有效，详见下方 validAccessToken）。
-@MainActor
-final class ZaiOAuthManager: ObservableObject {
-    static let shared = ZaiOAuthManager()
-    private init() {}
-
-    private let logger = AppLogger(category: "ZaiOAuth")
-
-    /// ZCode CLI 的 User-Agent（服务端按它识别客户端）。
-    static let userAgent = "ZCode/3.17.2"
-    static let appVersion = "3.17.2"
-    /// 登录窗口最长等待。
-    static let signInWindow: TimeInterval = 5 * 60
-
-    private var inFlightRefresh: [String: Task<ZaiTokenStorage, Error>] = [:]
-
-    struct LoginPresentation {
-        let authURL: URL
-        let site: ZaiSite
-    }
-
-    // MARK: - 状态
-
-    func isAuthenticated(instanceId: String) -> Bool {
-        ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: ZaiTokenStorage.self)?.accessToken.isEmpty == false
-    }
-
-    func maskedToken(instanceId: String) -> String? {
-        guard let t = ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: ZaiTokenStorage.self)?.accessToken,
-              t.count > 8 else { return nil }
-        return "\(t.prefix(4))…\(t.suffix(4))"
-    }
-
-    func accountName(instanceId: String) -> String? {
-        let n = ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: ZaiTokenStorage.self)?.accountName
-        return (n?.isEmpty == false) ? n : nil
-    }
-
-    func logout(instanceId: String) {
-        inFlightRefresh[instanceId]?.cancel()
-        inFlightRefresh[instanceId] = nil
-        ProviderKeychainHelper.deleteOAuthToken(instanceId: instanceId)
-    }
-
-    // MARK: - 登录
-
-    func login(
-        instanceId: String,
-        site: ZaiSite,
-        present: @escaping (LoginPresentation) -> Void
-    ) async throws {
-        logger.info("Z.ai login START (instance: \(instanceId), site: \(site.rawValue))")
-        let initResult = try await requestInit(site: site)
-        present(.init(authURL: initResult.authURL, site: site))
-        let creds = try await pollCredentials(site: site, init: initResult)
-        let storage = ZaiTokenStorage(
-            accessToken: creds.accessToken,
-            refreshToken: creds.refreshToken,
-            accountName: creds.accountName,
-            site: site.rawValue,
-            expireDate: nil,
-            lastRefresh: Date()
-        )
-        ProviderKeychainHelper.saveOAuthToken(storage, instanceId: instanceId)
-        logger.info("Z.ai login complete (instance: \(instanceId))")
-    }
-
-    // MARK: - token
-
-    func validAccessToken(instanceId: String) async throws -> String {
-        guard let storage = ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: ZaiTokenStorage.self) else {
-            throw LLMError.invalidAPIKey(detail: "Z.ai: no OAuth token found for instance \(instanceId)")
-        }
-        guard !storage.accessToken.isEmpty else {
-            throw LLMError.invalidAPIKey(detail: "Z.ai: access token is empty for instance \(instanceId)")
-        }
-        // Z.ai 当前未实现 refresh（accessToken 视为长期有效）；若服务端后续
-        // 引入过期，这里接 refreshToken 续期即可。
-        return storage.accessToken
-    }
-
-    // MARK: - 协议实现（实测确认：opencode-zcode-auth CLI 流）
-
-    /// `POST {zcode}/api/v1/oauth/cli/init`
-    /// headers: `Authorization: Bearer <随机32hex>`、`X-Device-Mid: <uuid>`
-    /// body: `{"provider": "zai"}`
-    /// → `{data:{flow_id, poll_token, authorize_url, expires_at, poll_interval_sec}}`
-    private func requestInit(site: ZaiSite) async throws -> InitResult {
-        let deviceMid = UUID().uuidString
-        let nonce = Self.randomHex(32)
-        guard let url = URL(string: site.zcodeBaseURL + "/api/v1/oauth/cli/init") else {
-            throw LLMError.providerError(message: "Z.ai: invalid init URL")
-        }
-        var req = URLRequest(url: url, timeoutInterval: 30)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue("application/json", forHTTPHeaderField: "Accept")
-        req.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
-        req.setValue("Bearer \(nonce)", forHTTPHeaderField: "Authorization")
-        req.setValue(deviceMid, forHTTPHeaderField: "X-Device-Mid")
-        req.httpBody = try JSONSerialization.data(withJSONObject: ["provider": site.initProvider])
-
-        let (data, response) = try await URLSession.shared.data(for: req)
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        let envelope = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
-        guard (200..<300).contains(status), let payload = envelope["data"] as? [String: Any] else {
-            let msg = (envelope["msg"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "HTTP \(status)"
-            throw LLMError.providerError(message: "Z.ai: init failed (\(msg))")
-        }
-        guard let flowId = payload["flow_id"] as? String, !flowId.isEmpty,
-              let pollToken = payload["poll_token"] as? String,
-              let authRaw = payload["authorize_url"] as? String, !authRaw.isEmpty,
-              var comps = URLComponents(string: authRaw) else {
-            throw LLMError.providerError(message: "Z.ai: init returned no sign-in page")
-        }
-        // 回调地址：`{zcode}/app/oauth/login?redirect=zcode://oauth/callback&app_version=`
-        let back = site.zcodeBaseURL + "/app/oauth/login?redirect=zcode%3A%2F%2Foauth%2Fcallback&app_version=" + Self.appVersion
-        var items = comps.queryItems ?? []
-        items.removeAll { $0.name == "redirect_uri" || $0.name == "redirect" }
-        items.append(URLQueryItem(name: "redirect_uri", value: back))
-        comps.queryItems = items
-        guard let authURL = comps.url else {
-            throw LLMError.providerError(message: "Z.ai: invalid authorize URL")
-        }
-        let interval = max(Self.num(payload["poll_interval_sec"]), 1)
-        let expires = Self.num(payload["expires_at"])
-        let expiresAt = expires > 0 ? Date(timeIntervalSince1970: expires) : Date().addingTimeInterval(5 * 60)
-        return InitResult(flowId: flowId, pollToken: pollToken, authURL: authURL,
-                          pollInterval: interval, expiresAt: expiresAt, deviceMid: deviceMid)
-    }
-
-    /// `GET {zcode}/api/v1/oauth/cli/poll/{flow_id}`（同 Bearer poll_token + X-Device-Mid）
-    /// → `{data:{status: pending|ready|failed, zai:{access_token}, token, user}}`
-    private func pollCredentials(site: ZaiSite, init initResult: InitResult) async throws -> PollResult {
-        let deadline = initResult.expiresAt
-        var consecutive = 0
-        while Date() < deadline {
-            try Task.checkCancellation()
-            guard let url = URL(string: site.zcodeBaseURL + "/api/v1/oauth/cli/poll/" + initResult.flowId) else {
-                throw LLMError.providerError(message: "Z.ai: invalid poll URL")
-            }
-            var req = URLRequest(url: url, timeoutInterval: 30)
-            req.httpMethod = "GET"
-            req.setValue("application/json", forHTTPHeaderField: "Accept")
-            req.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
-            req.setValue("Bearer \(initResult.pollToken)", forHTTPHeaderField: "Authorization")
-            req.setValue(initResult.deviceMid, forHTTPHeaderField: "X-Device-Mid")
-
-            do {
-                let (data, response) = try await URLSession.shared.data(for: req)
-                let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-                if status >= 400 && status < 500 && status != 408 && status != 429 {
-                    let env = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
-                    let msg = (env["msg"] as? String) ?? "HTTP \(status)"
-                    throw LLMError.providerError(message: "Z.ai sign-in: \(msg)")
-                }
-                let envelope = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
-                let payload = (envelope["data"] as? [String: Any]) ?? envelope
-                let state = (payload["status"] as? String) ?? ""
-                if state == "failed" {
-                    throw LLMError.providerError(message: "Z.ai: the sign-in was declined")
-                }
-                if state == "ready" {
-                    let zaiToken = ((payload["zai"] as? [String: Any])?["access_token"] as? String)
-                        ?? ((payload["zai"] as? [String: Any])?["accessToken"] as? String)
-                        ?? (payload["token"] as? String)
-                    guard let token = zaiToken, !token.isEmpty else {
-                        throw LLMError.providerError(message: "Z.ai: sign-in finished without a token")
-                    }
-                    let refresh = (payload["zai"] as? [String: Any])?["refresh_token"] as? String ?? ""
-                    let user = payload["user"] as? [String: Any]
-                    let name = (user?["name"] as? String) ?? (user?["email"] as? String) ?? "Z.ai"
-                    return PollResult(accessToken: token, refreshToken: refresh, accountName: name)
-                }
-                consecutive = 0
-            } catch let e as LLMError {
-                throw e
-            } catch is CancellationError {
-                throw CancellationError()
-            } catch {
-                consecutive += 1
-                if consecutive >= 3 {
-                    throw LLMError.providerError(message: "Z.ai polling failed: \(error.localizedDescription)")
-                }
-            }
-            try? await Task.sleep(for: .seconds(initResult.pollInterval))
-        }
-        throw LLMError.providerError(message: "Z.ai: the sign-in expired; try again")
-    }
-
-    // MARK: - 内部
-
-    private struct InitResult {
-        let flowId: String
-        let pollToken: String
-        let authURL: URL
-        let pollInterval: TimeInterval
-        let expiresAt: Date
-        let deviceMid: String
-    }
-
-    private struct PollResult {
-        let accessToken: String
-        let refreshToken: String
-        let accountName: String
-    }
-
-    private static func num(_ v: Any?) -> Double {
-        switch v {
-        case let d as Double: return d
-        case let i as Int: return Double(i)
-        case let s as String: return Double(s) ?? 0
-        default: return 0
-        }
-    }
-
-    static func randomHex(_ count: Int) -> String {
-        var bytes = [UInt8](repeating: 0, count: count)
-        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
-        return bytes.map { String(format: "%02x", $0) }.joined()
-    }
-}
-
 

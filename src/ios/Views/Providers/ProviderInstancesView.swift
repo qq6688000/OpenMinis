@@ -420,8 +420,6 @@ private struct InstanceRow: View {
         case .workBuddy: return WorkBuddyOAuthManager.shared.isAuthenticated(instanceId: instance.id)
         case .trae, .traeIntl: return TraeOAuthManager.shared.isAuthenticated(instanceId: instance.id)
         case .raccoon: return RaccoonOAuthManager.shared.isAuthenticated(instanceId: instance.id)
-        case .zai: return ZaiOAuthManager.shared.isAuthenticated(instanceId: instance.id)
-        case .qoder: return QoderOAuthManager.shared.isAuthenticated(instanceId: instance.id)
         case .unsupported: return false // synced from newer build
         }
     }

@@ -55,7 +55,7 @@ enum DebugRPCProvider {
             // Copilot's host is fixed; a custom base would just break the
             // header/endpoint contract the integration depends on. Same for
             // WorkBuddy — the site's own endpoint is fixed.
-            case .anthropic, .antigravity, .githubCopilot, .workBuddy, .zai, .qoder, .unsupported: customBaseSupported = false
+            case .anthropic, .antigravity, .githubCopilot, .workBuddy, .unsupported: customBaseSupported = false
             }
             return [
                 "id": type.rawValue,

@@ -325,7 +325,6 @@
 		E5KIMI0C1 /* KimiOAuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5KIMIR03 /* KimiOAuthManager.swift */; };
 		E5KIMI0D1 /* KimiModelsAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5KIMIR04 /* KimiModelsAPI.swift */; };
 		E5KIMIUI1 /* KimiDeviceLoginSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5KIMIUI2 /* KimiDeviceLoginSheet.swift */; };
-		E5ZAIUI1 /* ZaiLoginSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5ZAIUI2 /* ZaiLoginSheet.swift */; };
 		E5KVC0003 /* SafeKVCSetTrue.m in Sources */ = {isa = PBXBuildFile; fileRef = E5KVC0013 /* SafeKVCSetTrue.m */; };
 		E5L000001 /* FFmpegOffload.m in Sources */ = {isa = PBXBuildFile; fileRef = E5L000012 /* FFmpegOffload.m */; };
 		E5L100001 /* NativeOffloadUtils.m in Sources */ = {isa = PBXBuildFile; fileRef = E5L100012 /* NativeOffloadUtils.m */; };
@@ -576,9 +575,6 @@
 		ETRAE0009 /* TraeOAuthLogin.swift in Sources */ = {isa = PBXBuildFile; fileRef = ETRAE000A /* TraeOAuthLogin.swift */; };
 		ETRAE000D /* TraeToolSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = ETRAE000E /* TraeToolSupport.swift */; };
 		ETRAE000B /* TraeLoginSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = ETRAE000C /* TraeLoginSheet.swift */; };
-		EQDR0001 /* QoderProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = EQDR0002 /* QoderProvider.swift */; };
-		EQDR0003 /* QoderOAuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = EQDR0004 /* QoderOAuthManager.swift */; };
-		EQDR0005 /* QoderLoginSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = EQDR0006 /* QoderLoginSheet.swift */; };
 		E6A000002 /* AntigravityModelsAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6A000012 /* AntigravityModelsAPI.swift */; };
 		E6A000003 /* AntigravityOAuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6A000013 /* AntigravityOAuthManager.swift */; };
 		E6A000004 /* AntigravityAgentProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6A000014 /* AntigravityAgentProvider.swift */; };
@@ -1137,7 +1133,6 @@
 		E5KIMIR03 /* KimiOAuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KimiOAuthManager.swift; path = Providers/Kimi/OAuth/KimiOAuthManager.swift; sourceTree = SOURCE_ROOT; };
 		E5KIMIR04 /* KimiModelsAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KimiModelsAPI.swift; path = Providers/Kimi/KimiModelsAPI.swift; sourceTree = SOURCE_ROOT; };
 		E5KIMIUI2 /* KimiDeviceLoginSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KimiDeviceLoginSheet.swift; sourceTree = "<group>"; };
-		E5ZAIUI2 /* ZaiLoginSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZaiLoginSheet.swift; sourceTree = "<group>"; };
 		E5KVC0013 /* SafeKVCSetTrue.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SafeKVCSetTrue.m; sourceTree = "<group>"; };
 		E5KVC0014 /* SafeKVCSetTrue.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SafeKVCSetTrue.h; sourceTree = "<group>"; };
 		E5L000011 /* FFmpegOffload.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = FFmpegOffload.h; sourceTree = "<group>"; };
@@ -1405,9 +1400,6 @@
 		ETRAE000A /* TraeOAuthLogin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TraeOAuthLogin.swift; path = Providers/Trae/TraeOAuthLogin.swift; sourceTree = SOURCE_ROOT; };
 		ETRAE000E /* TraeToolSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TraeToolSupport.swift; path = Providers/Trae/TraeToolSupport.swift; sourceTree = SOURCE_ROOT; };
 		ETRAE000C /* TraeLoginSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TraeLoginSheet.swift; path = Views/Providers/TraeLoginSheet.swift; sourceTree = SOURCE_ROOT; };
-		EQDR0002 /* QoderProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = QoderProvider.swift; path = Providers/Qoder/QoderProvider.swift; sourceTree = SOURCE_ROOT; };
-		EQDR0004 /* QoderOAuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = QoderOAuthManager.swift; path = Providers/Qoder/QoderOAuthManager.swift; sourceTree = SOURCE_ROOT; };
-		EQDR0006 /* QoderLoginSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = QoderLoginSheet.swift; path = Views/Providers/QoderLoginSheet.swift; sourceTree = SOURCE_ROOT; };
 		E6A000012 /* AntigravityModelsAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AntigravityModelsAPI.swift; sourceTree = "<group>"; };
 		E6A000013 /* AntigravityOAuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AntigravityOAuthManager.swift; sourceTree = "<group>"; };
 		E6A000014 /* AntigravityAgentProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AntigravityAgentProvider.swift; sourceTree = "<group>"; };
@@ -1819,9 +1811,6 @@
 				ETRAE000A /* TraeOAuthLogin.swift */,
 				ETRAE000E /* TraeToolSupport.swift */,
 				ETRAE000C /* TraeLoginSheet.swift */,
-				EQDR0002 /* QoderProvider.swift */,
-				EQDR0004 /* QoderOAuthManager.swift */,
-				EQDR0006 /* QoderLoginSheet.swift */,
 				ERACC0006 /* RaccoonLoginSheet.swift */,
 				E5C000030 /* OpenAI */,
 				E7A000030 /* OpenRouter */,
@@ -2680,7 +2669,6 @@
 			children = (
 				E5D00032 /* AddProviderView.swift */,
 				E5KIMIUI2 /* KimiDeviceLoginSheet.swift */,
-				E5ZAIUI2 /* ZaiLoginSheet.swift */,
 				E5D00038 /* AgentLoopModelsView.swift */,
 				E5D00034 /* ModelGroupDetailView.swift */,
 				E5D00033 /* ModelGroupsView.swift */,
@@ -3446,9 +3434,6 @@
 				ETRAE0009 /* TraeOAuthLogin.swift in Sources */,
 				ETRAE000D /* TraeToolSupport.swift in Sources */,
 				ETRAE000B /* TraeLoginSheet.swift in Sources */,
-				EQDR0001 /* QoderProvider.swift in Sources */,
-				EQDR0003 /* QoderOAuthManager.swift in Sources */,
-				EQDR0005 /* QoderLoginSheet.swift in Sources */,
 				E6A000002 /* AntigravityModelsAPI.swift in Sources */,
 				E6A000003 /* AntigravityOAuthManager.swift in Sources */,
 				E6A000004 /* AntigravityAgentProvider.swift in Sources */,
@@ -3499,7 +3484,6 @@
 				E5SVP0021 /* ShadowVoiceProviderDetailView.swift in Sources */,
 				E5D00022 /* AddProviderView.swift in Sources */,
 				E5KIMIUI1 /* KimiDeviceLoginSheet.swift in Sources */,
-				E5ZAIUI1 /* ZaiLoginSheet.swift in Sources */,
 				E5D00023 /* ModelGroupsView.swift in Sources */,
 				E5D000F1 /* SwipeEditDestination.swift in Sources */,
 				E5QT00001 /* ModelQuickTestSheet.swift in Sources */,
