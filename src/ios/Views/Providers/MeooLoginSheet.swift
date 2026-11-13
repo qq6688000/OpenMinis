@@ -57,7 +57,7 @@ struct MeooLoginSheet: View {
                         finishLogin()
                     }
                     .buttonStyle(.borderedProminent)
-                    Text(AppLocalized(statusMessage))
+                    Text(statusMessage)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal)

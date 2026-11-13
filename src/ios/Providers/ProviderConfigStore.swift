@@ -3337,8 +3337,6 @@ final class ProviderConfigStore: ObservableObject {
             return await RaccoonModelsAPI.fetchModels(accessToken: token, orgCode: "", site: site)
         case (.meoo, _):
             return await MeooModelsAPI.fetchModelsFromCookie(instanceId: instance.id)
-            let site = instance.raccoonSite ?? .work
-            return await RaccoonModelsAPI.fetchModels(accessToken: token, orgCode: "", site: site)
         case (.unsupported, _):
             // Synced from a newer build — can't fetch; keep whatever's stored.
             return []

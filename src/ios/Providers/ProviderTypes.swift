@@ -470,6 +470,16 @@ struct MeooTokenStorage: Codable, Equatable {
 enum MeooModelsAPI {
     static let defaultModelId = "deepseek-v4-flash"
 
+    /// 内置回退模型目录（与网页模型选择一致的常见模型）。
+    static let allModels: [LLMModel] = [
+        LLMModel(id: "deepseek-v4-flash", displayName: "DeepSeek V4 Flash", provider: "Meoo"),
+        LLMModel(id: "deepseek-v4-pro", displayName: "DeepSeek V4 Pro", provider: "Meoo"),
+        LLMModel(id: "qwen3.8-flash", displayName: "Qwen3.8 Flash", provider: "Meoo"),
+        LLMModel(id: "qwen3.8-max", displayName: "Qwen3.8 Max", provider: "Meoo"),
+        LLMModel(id: "kimi-k2.5", displayName: "Kimi K2.5", provider: "Meoo"),
+        LLMModel(id: "glm-5.2", displayName: "GLM 5.2", provider: "Meoo"),
+    ]
+
     /// 登录后从 Meoo 网页目录拉取（`/api/v1/agent/models`）；失败回退内置。
     static func fetchModelsFromCookie(instanceId: String) async -> [LLMModel] {
         guard let st = ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: MeooTokenStorage.self),

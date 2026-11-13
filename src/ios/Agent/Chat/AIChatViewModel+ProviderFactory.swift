@@ -144,7 +144,8 @@ extension AIChatViewModel {
             return TraeAgentProvider(
                 provider: LLMProviderFactory.makeTraeProvider(instance: instance, model: entry.model))
         case .raccoon:
-            return makeRaccoonProvider(instance: instance, model: model)
+            return OpenAIAgentProvider(
+                provider: LLMProviderFactory.makeRaccoonProvider(instance: instance, model: entry.model))
         case .meoo:
             return TraeAgentProvider(
                 provider: LLMProviderFactory.makeMeooProvider(instance: instance, model: entry.model))
