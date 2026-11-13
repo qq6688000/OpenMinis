@@ -114,14 +114,17 @@ extension AIChatView {
             return
         }
         // Prompt rewrite is a standalone request, not a conversation turn.
-        // Give OpenCode-family channels their required per-request ID without
-        // synchronously creating/persisting a whole chat before the first token.
-        // Never reuse a live chat's ID: rewrite prompts must not enter its cache.
+        // Stream the result back into the composer so the first token appears
+        // well before the rewrite finishes; cache + in-flight dedup make a
+        // repeated tap instant. Only apply while the user hasn't typed more.
         do {
-            let rewritten = try await ChatOptimizer.shared.optimize(original, using: entry)
-            // Only apply if the user hasn't typed more in the meantime.
-            if vm.inputText == original {
-                vm.inputText = rewritten
+            var accumulated = ""
+            let stream = ChatOptimizer.shared.optimizeStreaming(original, using: entry)
+            for try await delta in stream {
+                accumulated += delta
+                if vm.inputText == original {
+                    vm.inputText = accumulated
+                }
             }
         } catch {
             // [T-optimize-prompt] Surface the failure instead of silently keeping

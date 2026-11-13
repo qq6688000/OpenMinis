@@ -66,13 +66,120 @@ final class ChatOptimizer {
 
     // MARK: Prompt rewrite ("优化词条")
 
-    /// Rewrite `text` into a clearer, more professional prompt using `entry`'s
-    /// provider. Returns the rewritten text, or the original on any failure.
+    /// [T-latency] Completed-rewrite cache: key is trimmed original text.
+    /// Lets a repeated tap on the same prompt return instantly instead of
+    /// re-running the whole rewrite. Cleared when the composer text changes
+    /// to a different value so stale results never resurface.
+    private var rewriteCache: [String: String] = [:]
+
+    /// In-flight rewrite keys, so a rapid re-tap on the same text does not
+    /// fan out a duplicate network call.
+    private var rewriteInFlight: Set<String> = []
+
+    /// Rewrite `text` into a clearer prompt, yielding each delta as it arrives
+    /// (streaming, so the composer shows the first token well before the whole
+    /// rewrite is done). The generation logic (system prompt, model call, SSE
+    /// parse) is unchanged — only the consumption is incremental.
     ///
-    /// This is not a conversation turn: use a fresh, one-off session ID for
-    /// OpenCode-family channels instead of creating a persistent chat first.
-    /// - Throws: `ChatOptimizerError.rewriteFailed` when the rewrite request
-    ///   fails, so the caller can surface a visible error to the user.
+    /// Cache hits emit the full cached text immediately. If a rewrite for the
+    /// exact same text is already in flight, an empty stream is returned (the
+    /// caller is already showing the streaming result — no duplicate request).
+    func optimizeStreaming(
+        _ text: String,
+        using entry: ModelEntry
+    ) -> AsyncThrowingStream<String, Error> {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return AsyncThrowingStream { continuation in
+            Task { @MainActor in
+                if let cached = rewriteCache[trimmed] {
+                    continuation.yield(cached)
+                    continuation.finish()
+                    return
+                }
+                if rewriteInFlight.contains(trimmed) {
+                    // Already rewriting this exact text; caller sees the live
+                    // stream. Skip the duplicate network call entirely.
+                    continuation.finish()
+                    return
+                }
+                rewriteInFlight.insert(trimmed)
+                defer { rewriteInFlight.remove(trimmed) }
+
+                for try await delta in rewriteStreaming(trimmed, using: entry) {
+                    continuation.yield(delta)
+                }
+                continuation.finish()
+            }
+        }
+    }
+
+    /// Drop the cache entry for `text` (e.g. when the user edits the prompt).
+    func invalidateRewriteCache(for text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        rewriteCache.removeValue(forKey: trimmed)
+    }
+
+    /// The actual rewrite request: streams from the provider, yielding each
+    /// delta as it arrives so the caller can render incrementally, while
+    /// accumulating the final text for the cache. Returns nothing on empty.
+    private func rewriteStreaming(
+        _ text: String,
+        using entry: ModelEntry
+    ) -> AsyncThrowingStream<String, Error> {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return AsyncThrowingStream { continuation in
+            let task = Task { @MainActor in
+                guard !trimmed.isEmpty else {
+                    continuation.yield(text)
+                    continuation.finish()
+                    return
+                }
+                let system = """
+                你是一个提示词优化助手。请把用户给出的原始指令改写成更清晰、更专业、\
+                更易于大模型理解的提示词。要求：
+                - 保留用户真实意图，不要改变任务本身；
+                - 补充必要的结构（如目标、约束、输出格式、语气）；
+                - 删除口语化废话；
+                - 保持简洁，尽量不超过原文的两倍长度；直接输出改写结果，不要解释、不要前后缀。
+                """
+                let messages: [LLMMessage] = [LLMMessage(role: .user, content: trimmed)]
+                do {
+                    let provider = try await LLMProviderFactory.makeProvider(
+                        for: entry, sessionId: OpenCodeChannel.oneOffSessionId())
+                    let stream = try await provider.streamMessage(
+                        messages: messages,
+                        systemPrompt: system,
+                        maxTokens: 384,
+                        temperature: 0.2
+                    )
+                    var acc = ""
+                    for try await chunk in stream {
+                        if case .text(let delta) = chunk {
+                            acc += delta
+                            continuation.yield(delta)
+                        }
+                    }
+                    let out = acc.trimmingCharacters(in: .whitespacesAndNewlines)
+                    // Cache the final text (not the trimmed fallback) so a
+                    // repeated tap returns the exact rewrite. Cap the cache so
+                    // it cannot grow unbounded across many distinct prompts.
+                    if self.rewriteCache.count >= 64 {
+                        self.rewriteCache.removeAll(keepingCapacity: true)
+                    }
+                    self.rewriteCache[trimmed] = out.isEmpty ? trimmed : out
+                    continuation.finish()
+                } catch {
+                    AppLogger(category: "ChatOptimizer").warning("[optimize] rewrite failed: \(error.localizedDescription)")
+                    continuation.finish(throwing: ChatOptimizerError.rewriteFailed(underlying: error))
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    /// Back-compat: non-streaming version used by older call sites.
     func optimize(_ text: String, using entry: ModelEntry) async throws -> String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return text }
