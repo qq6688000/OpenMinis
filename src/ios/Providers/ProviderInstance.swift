@@ -56,7 +56,6 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
     var traeSite: TraeSite?
     /// [T-raccoon] Raccoon 站点（当前只有一种）。
     var raccoonSite: RaccoonSite?
-    var meooSite: MeooSite?
 
     init(
         id: String = UUID().uuidString,
@@ -74,8 +73,7 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
         unknownProviderTypeRaw: String? = nil,
         workBuddySite: WorkBuddySite? = nil,
         traeSite: TraeSite? = nil,
-        raccoonSite: RaccoonSite? = nil,
-        meooSite: MeooSite? = nil
+        raccoonSite: RaccoonSite? = nil
     ) {
         self.id = id
         self.label = label
@@ -93,7 +91,6 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
         self.workBuddySite = workBuddySite
         self.traeSite = traeSite
         self.raccoonSite = raccoonSite
-        self.meooSite = meooSite
     }
 
     // MARK: - Codable (manual, for backwards compatibility)
@@ -101,7 +98,7 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
     enum CodingKeys: String, CodingKey {
         case id, label, providerType, credentialType, isEnabled, createdAt, customBaseURL, appendV1Suffix
         case imageEndpointMode, imageEndpointResolved, customUserAgent, azureMode, workBuddySite
-        case traeSite, raccoonSite, meooSite
+        case traeSite, raccoonSite
     }
 
     init(from decoder: Decoder) throws {
@@ -131,7 +128,6 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
         workBuddySite = (try? c.decodeIfPresent(WorkBuddySite.self, forKey: .workBuddySite))
         traeSite = (try? c.decodeIfPresent(TraeSite.self, forKey: .traeSite))
         raccoonSite = (try? c.decodeIfPresent(RaccoonSite.self, forKey: .raccoonSite))
-        meooSite = (try? c.decodeIfPresent(MeooSite.self, forKey: .meooSite))
     }
 
     func encode(to encoder: Encoder) throws {
@@ -157,7 +153,6 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
         if let workBuddySite { try c.encode(workBuddySite, forKey: .workBuddySite) }
         if let traeSite { try c.encode(traeSite, forKey: .traeSite) }
         if let raccoonSite { try c.encode(raccoonSite, forKey: .raccoonSite) }
-        if let meooSite { try c.encode(meooSite, forKey: .meooSite) }
     }
 
     /// Returns customUserAgent if non-nil and non-empty (trimmed), otherwise nil.
@@ -179,7 +174,7 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
         // [T-copilot-provider] Copilot's User-Agent is part of the protocol —
         // the API rejects requests that do not look like the editor plugin — so
         // it must not be user-overridable the way a proxy's UA is.
-        case .gemini, .antigravity, .githubCopilot, .workBuddy, .trae, .traeIntl, .raccoon, .meoo, .unsupported:
+        case .gemini, .antigravity, .githubCopilot, .workBuddy, .trae, .traeIntl, .raccoon, .unsupported:
             return false
         }
     }
@@ -216,7 +211,7 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
         switch providerType {
         case .openAI, .openAIResponses, .openRouter, .xAI, .kimiCode, .githubCopilot:
             return OpenCodeChannel.looksLikeOpenCodeBaseURL(effectiveCustomBaseURL)
-        case .anthropic, .gemini, .antigravity, .workBuddy, .trae, .traeIntl, .raccoon, .meoo, .unsupported:
+        case .anthropic, .gemini, .antigravity, .workBuddy, .trae, .traeIntl, .raccoon, .unsupported:
             return false
         }
     }
@@ -397,10 +392,6 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
             return ProviderKeychainHelper.loadOAuthToken(
                 instanceId: id, as: RaccoonTokenStorage.self, caller: "hasAnyCredential"
             )?.accessToken.isEmpty == false
-        case .meoo:
-            return ProviderKeychainHelper.loadOAuthToken(
-                instanceId: id, as: MeooTokenStorage.self, caller: "hasAnyCredential"
-            )?.cookie.isEmpty == false
         case .antigravity, .openRouter, .unsupported:
             // unsupported = synced from a newer build; no usable credential here.
             // antigravity stores its token via AntigravityOAuthManager (no

@@ -47,7 +47,6 @@ enum DebugRPCProvider {
             case .workBuddy: supportedCreds = ["oauth"]
             case .trae, .traeIntl: supportedCreds = ["oauth"]
             case .raccoon: supportedCreds = ["oauth"]
-        case .meoo: supportedCreds = ["oauth"]
             case .unsupported: supportedCreds = []
             }
             let customBaseSupported: Bool

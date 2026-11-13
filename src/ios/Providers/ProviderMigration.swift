@@ -98,9 +98,6 @@ enum ProviderMigration {
                 // [T-trae] New provider; no legacy singleton tokens to migrate.
                 break
             case .raccoon:
-                // [T-meoo] New provider; no legacy singleton tokens to migrate.
-                break
-            case .meoo:
                 // [T-raccoon] New provider; no legacy singleton tokens to migrate.
                 break
             case .unsupported:

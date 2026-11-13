@@ -17,8 +17,6 @@ struct ProviderInstanceDetailView: View {
     @State private var showTraeLogin = false
     /// [T-raccoon] Browser sign-in sheet for Raccoon.
     @State private var showRaccoonLogin = false
-    /// [T-meoo] WebView sign-in sheet for Meoo.
-    @State private var showMeooLogin = false
     @State private var keyInputText = ""
     @State private var isFetchingModels = false
     /// [T-thinking-rules-ui-fix] Owned HERE, not inside ThinkingRulesSection: a .sheet on a
@@ -146,16 +144,6 @@ struct ProviderInstanceDetailView: View {
         .sheet(isPresented: $showRaccoonLogin) {
             if let instance = instance {
                 RaccoonLoginSheet(instanceId: instance.id) { success in
-                    oauthRefreshTrigger.toggle()
-                    if success {
-                        Task { await store.refreshModels(for: instance) }
-                    }
-                }
-            }
-        }
-        .sheet(isPresented: $showMeooLogin) {
-            if let instance = instance {
-                MeooLoginSheet(instanceId: instance.id, initialSite: instance.meooSite ?? .cn) { success in
                     oauthRefreshTrigger.toggle()
                     if success {
                         Task { await store.refreshModels(for: instance) }
@@ -684,8 +672,6 @@ struct ProviderInstanceDetailView: View {
             showTraeLogin = true
         } else if instance.providerType == .raccoon {
             showRaccoonLogin = true
-        } else if instance.providerType == .meoo {
-            showMeooLogin = true
         } else {
             Task {
                 await oauthLogin(instance)
@@ -712,7 +698,6 @@ struct ProviderInstanceDetailView: View {
         case .workBuddy: return (instance.workBuddySite ?? .china).chatBaseURL
         case .trae, .traeIntl: return (instance.traeSite ?? .china).remoteBase
         case .raccoon: return (instance.raccoonSite ?? .work).chatBaseURL
-        case .meoo: return (instance.meooSite ?? .cn).webBase
         case .unsupported: return "—"
         }
     }
@@ -1156,7 +1141,6 @@ struct ProviderInstanceDetailView: View {
         case .workBuddy: return WorkBuddyOAuthManager.shared.isAuthenticated(instanceId: instance.id)
         case .trae, .traeIntl: return TraeOAuthManager.shared.isAuthenticated(instanceId: instance.id)
         case .raccoon: return RaccoonOAuthManager.shared.isAuthenticated(instanceId: instance.id)
-        case .meoo: return ProviderKeychainHelper.loadOAuthToken(instanceId: instance.id, as: MeooTokenStorage.self)?.cookie.isEmpty == false
         case .unsupported: return false // synced from newer build
         }
     }
@@ -1239,12 +1223,6 @@ struct ProviderInstanceDetailView: View {
                 return name.map { "\($0) · \(AppLocalized("Authenticated"))" } ?? AppLocalized("Authenticated")
             }
             return AppLocalized("Not authenticated")
-        case .meoo:
-            let st = ProviderKeychainHelper.loadOAuthToken(instanceId: instance.id, as: MeooTokenStorage.self)
-            if st?.cookie.isEmpty == false {
-                return (st?.accountName).map { "\($0) · \(AppLocalized("Authenticated"))" } ?? AppLocalized("Authenticated")
-            }
-            return AppLocalized("Not authenticated")
         case .unsupported:
             return AppLocalized("Unsupported in this app version")
         }
@@ -1265,7 +1243,6 @@ struct ProviderInstanceDetailView: View {
         case .trae: return AppLocalized("Sign in with Trae CN")
         case .traeIntl: return AppLocalized("Sign in with Trae")
         case .raccoon: return AppLocalized("Sign in with Raccoon")
-        case .meoo: return AppLocalized("Sign in with Meoo")
         case .unsupported: return AppLocalized("Sign In")
         }
     }
@@ -1285,7 +1262,6 @@ struct ProviderInstanceDetailView: View {
             case .workBuddy: break // browser flow runs in WorkBuddyLoginSheet
             case .trae, .traeIntl: break // browser flow runs in TraeLoginSheet
             case .raccoon: break // browser flow runs in RaccoonLoginSheet
-            case .meoo: break // WebView flow runs in MeooLoginSheet
             case .unsupported: break
             }
             // [T-provider-oauth-model-discovery] Reconcile models on a
@@ -1337,7 +1313,6 @@ struct ProviderInstanceDetailView: View {
         case .workBuddy: WorkBuddyOAuthManager.shared.logout(instanceId: instance.id)
         case .trae, .traeIntl: TraeOAuthManager.shared.logout(instanceId: instance.id)
         case .raccoon: RaccoonOAuthManager.shared.logout(instanceId: instance.id)
-        case .meoo: ProviderKeychainHelper.deleteOAuthToken(instanceId: instance.id)
         case .unsupported: break
         }
     }
@@ -1369,8 +1344,6 @@ struct ProviderInstanceDetailView: View {
             token = try? await TraeOAuthManager.shared.validAccessToken(instanceId: instance.id)
         case .raccoon:
             token = try? await RaccoonOAuthManager.shared.validAccessToken(instanceId: instance.id)
-        case .meoo:
-            token = ProviderKeychainHelper.loadOAuthToken(instanceId: instance.id, as: MeooTokenStorage.self)?.cookie
         case .unsupported:
             token = nil
         }
@@ -1391,7 +1364,6 @@ struct ProviderInstanceDetailView: View {
         case .workBuddy: return "" // OAuth only
         case .trae, .traeIntl: return "" // OAuth only
         case .raccoon: return "" // OAuth only
-        case .meoo: return "" // WebView session only
         case .antigravity: return "API Key..."
         case .openRouter: return "sk-or-..."
         case .openAIResponses: return "sk-..."

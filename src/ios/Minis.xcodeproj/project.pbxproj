@@ -7,9 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		EMEOO0001 /* MeooProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = EMEOO0002 /* MeooProvider.swift */; };
-		EMEOO0003 /* MeooLoginSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = EMEOO0004 /* MeooLoginSheet.swift */; };
-
 		21FED4B7BB6F6D9476C9992E /* VoiceProvider+System.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88993FC8E3F0199C6638F664 /* VoiceProvider+System.swift */; };
 		241D530017827D7F0EB604DE /* VoiceProviderFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2941B643B8A2F048A2B154E /* VoiceProviderFactory.swift */; };
 		2A4FD49F872431D703328384 /* VoiceOutputPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 424510790AF3FB2452D3CCE3 /* VoiceOutputPlayer.swift */; };
@@ -736,9 +733,6 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		EMEOO0002 /* MeooProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MeooProvider.swift; path = Providers/Meoo/MeooProvider.swift; sourceTree = SOURCE_ROOT; };
-		EMEOO0004 /* MeooLoginSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MeooLoginSheet.swift; path = Views/Providers/MeooLoginSheet.swift; sourceTree = SOURCE_ROOT; };
-
 		0ED149397BEA7E0408C92688 /* GroupVoiceModelsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GroupVoiceModelsView.swift; sourceTree = "<group>"; };
 		0F5379380323FA8C6477708C /* GroupSlotPicker.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GroupSlotPicker.swift; sourceTree = "<group>"; };
 		16FF3462D09402F14B610CD6 /* VoiceWaveformView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoiceWaveformView.swift; sourceTree = "<group>"; };
@@ -1811,8 +1805,6 @@
 				ETRAE0002 /* TraeProvider.swift */,
 				ETRAE0004 /* TraeAgentProvider.swift */,
 				ETRAE0006 /* TraeOAuthManager.swift */,
-				EMEOO0002 /* MeooProvider.swift */,
-				EMEOO0004 /* MeooLoginSheet.swift */,
 				ERACC0002 /* RaccoonOAuthManager.swift */,
 				ERACC0004 /* RaccoonOAuthLogin.swift */,
 				ERACC0008 /* RaccoonCallbackBroker.swift */,
@@ -3435,8 +3427,6 @@
 				ETRAE0001 /* TraeProvider.swift in Sources */,
 				ETRAE0003 /* TraeAgentProvider.swift in Sources */,
 				ETRAE0005 /* TraeOAuthManager.swift in Sources */,
-				EMEOO0001 /* MeooProvider.swift in Sources */,
-				EMEOO0003 /* MeooLoginSheet.swift in Sources */,
 				ERACC0001 /* RaccoonOAuthManager.swift in Sources */,
 				ERACC0003 /* RaccoonOAuthLogin.swift in Sources */,
 				ERACC0007 /* RaccoonCallbackBroker.swift in Sources */,
