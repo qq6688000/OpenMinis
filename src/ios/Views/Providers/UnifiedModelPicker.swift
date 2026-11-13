@@ -1577,6 +1577,12 @@ struct UnifiedModelPicker: View {
                         .padding(.vertical, 1)
                         .background(Color(UIColor.tertiarySystemFill))
                         .clipShape(RoundedRectangle(cornerRadius: 3))
+                } else if latencyFailed(for: entry) {
+                    // 测速失败（软信号）：红✗标记，但模型仍可用。
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.red)
+                        .frame(width: 18)
                 }
 
                 quickTestButton(entry)
@@ -1635,13 +1641,18 @@ struct UnifiedModelPicker: View {
         guard let data = UserDefaults.standard.data(forKey: key),
               let cache = try? JSONDecoder().decode(ModelLatencyCache.self, from: data) else { return nil }
         if let seconds = cache.entries[entry.id] {
-            let ms = Int((seconds * 1000).rounded())
-            return "\(ms)ms"
+            // 参考包（官方 CI）显示为秒：1.4s / 4.3s。
+            return String(format: "%.1fs", seconds)
         }
-        // A failed speed test is a soft signal (transient error) — do NOT surface a
-        // warning badge for it. Only successfully-tested models show latency; the
-        // rest show nothing, so a working model is never flagged as "abnormal".
         return nil
+    }
+
+    /// 测速失败（软信号）：参考包用红✗标记，但模型仍可用、不灰化。
+    private func latencyFailed(for entry: ModelEntry) -> Bool {
+        let key = "chatOptimizer.latencyCache"
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let cache = try? JSONDecoder().decode(ModelLatencyCache.self, from: data) else { return false }
+        return cache.errors[entry.id] != nil && cache.entries[entry.id] == nil
     }
 
     /// Modality tags and the "unavailable" tag, as HStack children.
