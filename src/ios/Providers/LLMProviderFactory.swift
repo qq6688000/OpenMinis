@@ -84,6 +84,8 @@ enum LLMProviderFactory {
             return makeTraeProvider(instance: instance, model: entry.model)
         case .raccoon:
             return openCode(makeRaccoonProvider(instance: instance, model: entry.model))
+        case .meoo:
+            return makeMeooProvider(instance: instance, model: entry.model)
         case .unsupported:
             throw FactoryError.voiceOnlyProvider
         }
@@ -500,6 +502,11 @@ enum LLMProviderFactory {
     /// 账号用 Bearer token + `X-Org-Code`（office_identity）认证，走
     /// OpenAIProvider 的 oauthTokenProvider + extraHeaders，站点由
     /// `instance.raccoonSite` 指定。
+    /// Meoo：网页会话 Cookie 鉴权的项目 Agent 聊天，自定义 `MeooProvider`。
+    static func makeMeooProvider(instance: ProviderInstance, model: LLMModel) -> MeooProvider {
+        MeooProvider(model: model, site: instance.meooSite ?? .cn, instanceId: instance.id)
+    }
+
     static func makeRaccoonProvider(instance: ProviderInstance, model: LLMModel) -> OpenAIProvider {
         let site = instance.raccoonSite ?? .work
         let provider: OpenAIProvider

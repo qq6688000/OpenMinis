@@ -420,6 +420,7 @@ private struct InstanceRow: View {
         case .workBuddy: return WorkBuddyOAuthManager.shared.isAuthenticated(instanceId: instance.id)
         case .trae, .traeIntl: return TraeOAuthManager.shared.isAuthenticated(instanceId: instance.id)
         case .raccoon: return RaccoonOAuthManager.shared.isAuthenticated(instanceId: instance.id)
+        case .meoo: return ProviderKeychainHelper.loadOAuthToken(instanceId: instance.id, as: MeooTokenStorage.self)?.cookie.isEmpty == false
         case .unsupported: return false // synced from newer build
         }
     }

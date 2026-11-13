@@ -1393,6 +1393,8 @@ final class ProviderConfigStore: ObservableObject {
                 return ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: TraeTokenStorage.self).flatMap { try? JSONEncoder().encode($0) }
             case .raccoon:
                 return ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: RaccoonTokenStorage.self).flatMap { try? JSONEncoder().encode($0) }
+            case .meoo:
+                return ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: MeooTokenStorage.self).flatMap { try? JSONEncoder().encode($0) }
             default:
                 return nil
             }
@@ -1538,6 +1540,10 @@ final class ProviderConfigStore: ObservableObject {
                 }
             case .raccoon:
                 if let t = try? JSONDecoder().decode(RaccoonTokenStorage.self, from: blob) {
+                    ProviderKeychainHelper.saveOAuthToken(t, instanceId: instance.id)
+                }
+            case .meoo:
+                if let t = try? JSONDecoder().decode(MeooTokenStorage.self, from: blob) {
                     ProviderKeychainHelper.saveOAuthToken(t, instanceId: instance.id)
                 }
             default:
@@ -3329,6 +3335,10 @@ final class ProviderConfigStore: ObservableObject {
             let token = try await RaccoonOAuthManager.shared.validAccessToken(instanceId: instance.id)
             let site = instance.raccoonSite ?? .work
             return await RaccoonModelsAPI.fetchModels(accessToken: token, orgCode: "", site: site)
+        case (.meoo, _):
+            return await MeooModelsAPI.fetchModelsFromCookie(instanceId: instance.id)
+            let site = instance.raccoonSite ?? .work
+            return await RaccoonModelsAPI.fetchModels(accessToken: token, orgCode: "", site: site)
         case (.unsupported, _):
             // Synced from a newer build — can't fetch; keep whatever's stored.
             return []
@@ -3518,6 +3528,7 @@ final class ProviderConfigStore: ObservableObject {
         case .workBuddy: return (instance.workBuddySite ?? .china).endpoint
         case .trae, .traeIntl: return (instance.traeSite ?? .china).remoteBase
         case .raccoon: return (instance.raccoonSite ?? .work).apiBase
+        case .meoo: return (instance.meooSite ?? .cn).webBase
         case .unsupported: return nil // synced from newer build
         }
     }

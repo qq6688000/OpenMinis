@@ -43,6 +43,9 @@ enum ProviderType: String, Codable, CaseIterable, Hashable, Sendable {
     /// `{apiBase}/api/web/llm/v2/chat/completions`，Bearer token +
     /// `X-Org-Code` 认证，登录走浏览器。走 OpenAIProvider。
     case raccoon
+    /// 秒悟（Meoo）：网页会话（Cookie）登录，用同源 `/api/v1/agent/*`
+    /// 项目 Agent 聊天。见 `MeooProvider` / `MeooLoginSheet`。
+    case meoo
     /// Sentinel for a provider type this app build doesn't recognize — e.g. a
     /// NEWER build synced an instance whose `provider_type` string isn't a known
     /// case here. We DECODE to this instead of throwing/dropping, so the instance
@@ -72,6 +75,7 @@ enum ProviderType: String, Codable, CaseIterable, Hashable, Sendable {
         case .trae: return "Trae"
         case .traeIntl: return "Trae (Intl)"
         case .raccoon: return "Raccoon"
+        case .meoo: return "Meoo"
         case .unsupported: return "Unsupported"
         }
     }
@@ -109,6 +113,9 @@ enum ProviderType: String, Codable, CaseIterable, Hashable, Sendable {
         case .raccoon:
             // Raccoon 目录来自 `model_catalog`。
             return true
+        case .meoo:
+            // Meoo 目录来自网页 `/api/v1/agent/models`（登录后注入 JS 拉取）。
+            return false
         case .openAI:
             // OpenAIModelsAPI.fetchModelsOAuth() is a compiled-in list.
             return false
@@ -136,6 +143,7 @@ enum ProviderType: String, Codable, CaseIterable, Hashable, Sendable {
         case .workBuddy: return WorkBuddyModelsAPI.allModels
         case .trae, .traeIntl: return TraeModelsAPI.allModels
         case .raccoon: return RaccoonModelsAPI.allModels
+        case .meoo: return MeooModelsAPI.allModels
         // Deliberately empty: the task requires the list come from the server
         // (`model_picker_enabled`), never a compiled-in guess that would go
         // stale and offer models the account cannot use.
@@ -172,6 +180,8 @@ enum ProviderType: String, Codable, CaseIterable, Hashable, Sendable {
             return AppLocalized("Sign in with your Trae account in the browser.")
         case .raccoon:
             return AppLocalized("Sign in with your Raccoon account in the browser.")
+        case .meoo:
+            return AppLocalized("Sign in with your Meoo account in the web view.")
         case .antigravity:
             return AppLocalized("\(builtInModels.count) built-in models")
         case .unsupported:
@@ -194,6 +204,7 @@ enum ProviderType: String, Codable, CaseIterable, Hashable, Sendable {
         case .workBuddy: return .vision
         case .trae, .traeIntl: return .vision
         case .raccoon: return .vision
+        case .meoo: return .vision
         case .unsupported: return .vision
         }
     }
@@ -420,6 +431,67 @@ struct RaccoonTokenStorage: Codable, Equatable {
     var site: String
     var lastRefresh: Date
 }
+
+/// [T-meoo] Meoo（秒悟）站点。网页会话（Cookie）登录，单站点 CN。
+enum MeooSite: String, Codable, CaseIterable, Hashable, Sendable {
+    case cn = "cn"
+
+    var displayName: String { "Meoo" }
+
+    /// 网页与同源 API 基座。登录与聊天都在此 origin 下。
+    var webBase: String { "https://meoo.com" }
+
+    /// 模型列表端点（GET，Cookie 鉴权）。
+    var modelsPath: String { "/api/v1/agent/models" }
+
+    /// 聊天入队端点（POST，Cookie 鉴权，SSE 返回）。
+    var enqueuePath: String { "/api/v1/agent/chat/queue/enqueue" }
+
+    /// 项目 Agent 运行端点（POST，Cookie 鉴权，SSE 流式）。
+    var runPath: String { "/api/agent/build/run" }
+
+    var host: String { "meoo.com" }
+
+    static func fromRaw(_ raw: String?) -> MeooSite {
+        raw.flatMap(MeooSite.init(rawValue:)) ?? .cn
+    }
+}
+
+/// [T-meoo] 网页登录后保存的会话 Cookie（meoo.com 域），用于发起同源聊天请求。
+struct MeooTokenStorage: Codable, Equatable {
+    var cookie: String
+    var accountName: String?
+    var site: String
+    var lastRefresh: Date
+}
+
+/// [T-meoo] 内置回退模型目录。登录后 `MeooModelsAPI.fetchModels` 会用
+/// 网页会话拉 `/api/v1/agent/models` 覆盖；此处兜底（与截图一致的常见模型）。
+enum MeooModelsAPI {
+    static let defaultModelId = "deepseek-v4-flash"
+
+    /// 登录后从 Meoo 网页目录拉取（`/api/v1/agent/models`）；失败回退内置。
+    static func fetchModelsFromCookie(instanceId: String) async -> [LLMModel] {
+        guard let st = ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: MeooTokenStorage.self),
+              !st.cookie.isEmpty else { return allModels }
+        var req = URLRequest(url: URL(string: "https://meoo.com/api/v1/agent/models")!)
+        req.allHTTPHeaderFields = ["Cookie": st.cookie, "Accept": "application/json"]
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200,
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let models = json["models"] as? [[String: Any]] else { return allModels }
+        let parsed: [LLMModel] = models.compactMap { m in
+            let id = m["value"] as? String ?? m["id"] as? String
+            guard let id, !id.isEmpty else { return nil }
+            let name = m["key"] as? String ?? m["display_name"] as? String ?? id
+            return LLMModel(id: id, displayName: name, provider: "Meoo")
+        }
+        return parsed.isEmpty ? allModels : parsed
+    }
+}
+
+/// [T-meoo] Meoo 网页会话 Cookie 的模型列表拉取（供 `fetchModels` 使用）。
+enum MeooModelsFetcher {}
 
 /// [T-trae] Trae 账号凭据，按实例存 Keychain。
 struct TraeTokenStorage: Codable, Equatable {

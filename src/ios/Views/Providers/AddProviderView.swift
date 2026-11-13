@@ -181,6 +181,7 @@ struct AddProviderView: View {
     @State private var showCopilotLogin = false
     @State private var showTraeLogin = false
     @State private var showRaccoonLogin = false
+    @State private var showMeooLogin = false
     @State private var selectedTraeSite: TraeSite = .china
     @State private var oauthAuthTime: Date?
     @State private var showDataSharingConsent = false
@@ -380,6 +381,15 @@ struct AddProviderView: View {
                 if success {
                     oauthAuthTime = Date()
                     oauthMaskedToken = loadMaskedToken(type: .raccoon)
+                    pendingOAuthDone = true
+                }
+            }
+        }
+        .sheet(isPresented: $showMeooLogin) {
+            MeooLoginSheet(instanceId: pendingInstanceId, initialSite: .cn) { success in
+                if success {
+                    oauthAuthTime = Date()
+                    oauthMaskedToken = loadMaskedToken(type: .meoo)
                     pendingOAuthDone = true
                 }
             }
@@ -1117,6 +1127,11 @@ struct AddProviderView: View {
             case .raccoon:
                 showRaccoonLogin = true
                 return
+            // [T-meoo] WebView flow runs in MeooLoginSheet.
+            case .meoo:
+                showMeooLogin = true
+                return
+                return
             case .unsupported: break // free / unsupported — no OAuth
             }
             oauthAuthTime = Date()
@@ -1158,6 +1173,8 @@ struct AddProviderView: View {
             token = ProviderKeychainHelper.loadOAuthToken(instanceId: pendingInstanceId, as: TraeTokenStorage.self)?.accessToken
         case .raccoon:
             token = ProviderKeychainHelper.loadOAuthToken(instanceId: pendingInstanceId, as: RaccoonTokenStorage.self)?.accessToken
+        case .meoo:
+            token = ProviderKeychainHelper.loadOAuthToken(instanceId: pendingInstanceId, as: MeooTokenStorage.self)?.cookie
         case .unsupported:
             token = nil // free / unsupported — no token
         }
@@ -1242,6 +1259,7 @@ struct AddProviderView: View {
         case .trae: return AppLocalized("Sign in with Trae CN")
         case .traeIntl: return AppLocalized("Sign in with Trae")
         case .raccoon: return AppLocalized("Sign in with Raccoon")
+        case .meoo: return AppLocalized("Sign in with Meoo")
         case .unsupported: return AppLocalized("Sign In")
         }
     }
@@ -1261,6 +1279,7 @@ struct AddProviderView: View {
         case .workBuddy: return "" // OAuth only
         case .trae, .traeIntl: return "" // OAuth only
         case .raccoon: return "" // OAuth only
+        case .meoo: return "" // WebView session only
         case .unsupported: return ""
         }
     }
@@ -1280,6 +1299,7 @@ struct AddProviderView: View {
         case .trae: return "Trae"
         case .traeIntl: return "Trae (Intl)"
         case .raccoon: return "Raccoon"
+        case .meoo: return "Meoo"
         case .unsupported: return AppLocalized("Unsupported")
         }
     }
@@ -1317,6 +1337,8 @@ struct AddProviderView: View {
         case .trae, .traeIntl:
             return [.oauth]
         case .raccoon:
+            return [.oauth]
+        case .meoo:
             return [.oauth]
         case .openAIResponses, .gemini:
             return [.apiKey]
@@ -1361,6 +1383,8 @@ struct AddProviderView: View {
             return AppLocalized("Sign in with your Trae account. Trae login grants access to its model catalog.")
         case (.raccoon, _):
             return AppLocalized("Sign in with your Raccoon account. Raccoon login grants access to its model catalog.")
+        case (.meoo, _):
+            return AppLocalized("Sign in with your Meoo account in the built-in web view. Uses your Meoo daily credits.")
         case (.unsupported, _):
             return AppLocalized("This provider isn't supported in this app version.")
         }
@@ -1408,6 +1432,9 @@ struct AddProviderView: View {
         case .raccoon:
             Image(systemName: "pawprint.fill")
                 .foregroundStyle(.pink)
+        case .meoo:
+            Image(systemName: "sparkles")
+                .foregroundStyle(.cyan)
         case .unsupported:
             Image(systemName: "questionmark.circle")
                 .foregroundStyle(.gray)
@@ -1429,6 +1456,7 @@ struct AddProviderView: View {
         case .trae: return .indigo
         case .traeIntl: return .indigo
         case .raccoon: return .pink
+        case .meoo: return .cyan
         case .unsupported: return .gray
         }
     }
