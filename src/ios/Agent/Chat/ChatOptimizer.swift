@@ -69,14 +69,11 @@ final class ChatOptimizer {
     /// Rewrite `text` into a clearer, more professional prompt using `entry`'s
     /// provider. Returns the rewritten text, or the original on any failure.
     ///
-    /// - Parameter sessionId: the live conversation session id. OpenCode-family
-    ///   channels (WorkBuddy, OpenCode, OpenRouter, …) **require** a non-nil
-    ///   session id on every request — calling with `nil` is a hard 400 from the
-    ///   upstream ("missing x-opencode-session"). Always pass the real session id.
+    /// This is not a conversation turn: use a fresh, one-off session ID for
+    /// OpenCode-family channels instead of creating a persistent chat first.
     /// - Throws: `ChatOptimizerError.rewriteFailed` when the rewrite request
-    ///   fails, so the caller can surface a visible error to the user instead of
-    ///   silently returning the original text.
-    func optimize(_ text: String, using entry: ModelEntry, sessionId: String?) async throws -> String {
+    ///   fails, so the caller can surface a visible error to the user.
+    func optimize(_ text: String, using entry: ModelEntry) async throws -> String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return text }
 
@@ -86,7 +83,7 @@ final class ChatOptimizer {
         - 保留用户真实意图，不要改变任务本身；
         - 补充必要的结构（如目标、约束、输出格式、语气）；
         - 删除口语化废话；
-        - 直接输出优化后的提示词，不要解释、不要前后缀。
+        - 保持简洁，尽量不超过原文的两倍长度；直接输出改写结果，不要解释、不要前后缀。
         """
 
         let messages: [LLMMessage] = [
@@ -94,18 +91,17 @@ final class ChatOptimizer {
         ]
 
         do {
-            // Use a per-request session id resolver so a nil/draft id (or a
-            // draft→real promotion that happens before this call) is resolved at
-            // request-build time — exactly like the live conversation path. This
-            // avoids the OpenCode 400 that the old `sessionId: nil` snapshot hit.
-            let provider = try await LLMProviderFactory.makeProvider(for: entry, resolveSessionId: { sessionId })
+            // OpenCode-family channels require an ID, but this operation does
+            // not belong to the conversation. Isolate it with a one-off ID.
+            let provider = try await LLMProviderFactory.makeProvider(
+                for: entry, sessionId: OpenCodeChannel.oneOffSessionId())
             // [T-optimize-stream] Some providers (WorkBuddy etc.) reject non-stream
             // requests with HTTP 400 "Non-stream chat request is not supported", so
             // we ALWAYS use the streaming path and concatenate the deltas.
             let stream = try await provider.streamMessage(
                 messages: messages,
                 systemPrompt: system,
-                maxTokens: 1024,
+                maxTokens: 384,
                 temperature: 0.2
             )
             var acc = ""

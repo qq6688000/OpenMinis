@@ -113,15 +113,12 @@ extension AIChatView {
             AppLogger(category: "ChatOptimizer").warning("[optimize] no active entry; skip")
             return
         }
-        // Real session id: OpenCode-family channels (WorkBuddy included) reject
-        // sessionId=nil with a 400. Create the session first if needed.
-        var sid = vm.sessionId
-        if sid == nil {
-            await vm.ensureSession()
-            sid = vm.sessionId
-        }
+        // Prompt rewrite is a standalone request, not a conversation turn.
+        // Give OpenCode-family channels their required per-request ID without
+        // synchronously creating/persisting a whole chat before the first token.
+        // Never reuse a live chat's ID: rewrite prompts must not enter its cache.
         do {
-            let rewritten = try await ChatOptimizer.shared.optimize(original, using: entry, sessionId: sid)
+            let rewritten = try await ChatOptimizer.shared.optimize(original, using: entry)
             // Only apply if the user hasn't typed more in the meantime.
             if vm.inputText == original {
                 vm.inputText = rewritten
