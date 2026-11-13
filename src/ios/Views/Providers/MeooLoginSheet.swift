@@ -97,24 +97,25 @@ struct MeooLoginSheet: View {
         statusMessage = AppLocalized("读取会话…")
         guard let wk = webView else { phase = .failed("WebView 未就绪"); return }
         // 1) 拉模型列表（同源 fetch，自动带 Cookie）。
-        let js = """
-        (async () => {
-          try {
-            const r = await fetch('/api/v1/agent/models', { credentials: 'include' });
-            if (!r.ok) return JSON.stringify({ ok:false, status:r.status });
-            const j = await r.json();
-            return JSON.stringify({ ok:true, models:(j.models||[]).map(m=>({ id:m.value||m.id, name:m.key||m.display_name||m.value||m.id })) });
-          } catch(e) { return JSON.stringify({ ok:false, error:String(e) }); }
-        })();
-        """
-        wk.evaluateJavaScript(js) { result, error in
+        wk.callAsyncJavaScript(
+            """
+            try {
+              const r = await fetch('/api/v1/agent/models', { credentials: 'include' });
+              if (!r.ok) return { ok:false, status:r.status };
+              const j = await r.json();
+              return { ok:true, models:(j.models||[]).map(m=>({ id:m.value||m.id, name:m.key||m.display_name||m.value||m.id })) };
+            } catch(e) { return { ok:false, error:String(e) }; }
+            """,
+            arguments: [:],
+            in: nil,
+            in: .page
+        ) { result, error in
             if let error {
                 statusMessage = AppLocalized("拉取模型失败：\(error.localizedDescription)")
                 phase = .failed("模型列表拉取失败：\(error.localizedDescription)")
                 return
             }
-            guard let s = result as? String, let data = s.data(using: .utf8),
-                  let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            guard let obj = result as? [String: Any] else {
                 statusMessage = AppLocalized("模型列表解析失败")
                 phase = .failed("模型列表解析失败")
                 return
