@@ -74,7 +74,7 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
         unknownProviderTypeRaw: String? = nil,
         workBuddySite: WorkBuddySite? = nil,
         traeSite: TraeSite? = nil,
-        raccoonSite: RaccoonSite? = nil
+        raccoonSite: RaccoonSite? = nil,
         meooSite: MeooSite? = nil
     ) {
         self.id = id
