@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   ipa:
-    runs-on: macos-26
+    runs-on: macos-15
     timeout-minutes: 240
     steps:
       - uses: actions/checkout@v5
