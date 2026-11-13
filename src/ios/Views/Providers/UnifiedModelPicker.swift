@@ -1562,13 +1562,8 @@ struct UnifiedModelPicker: View {
                 // column takes the free width instead of a Spacer.
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                // [T-optimize-prompt] Availability wifi icon + latency badge on the
-                // trailing edge. Green = reachable; grey = unavailable (either the
-                // provider delisted it, or our speed test failed for it).
-                Image(systemName: "wifi")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(isEntryUnavailable(entry) ? Color(UIColor.tertiaryLabel) : Color.green)
-                    .frame(width: 18)
+                // [T-latency-order] Match reference build: latency badge / red-x on
+                // the left, wifi icon rightmost.
                 if let ms = latencyBadgeText(for: entry) {
                     Text(ms)
                         .font(.system(size: 9, weight: .medium))
@@ -1584,6 +1579,13 @@ struct UnifiedModelPicker: View {
                         .foregroundStyle(.red)
                         .frame(width: 18)
                 }
+
+                // [T-optimize-prompt] Availability wifi icon on the trailing edge.
+                // Green = reachable; grey = unavailable (provider delisted it).
+                Image(systemName: "wifi")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(isEntryUnavailable(entry) ? Color(UIColor.tertiaryLabel) : Color.green)
+                    .frame(width: 18)
 
                 quickTestButton(entry)
         }
