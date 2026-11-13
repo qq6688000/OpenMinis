@@ -145,11 +145,11 @@ final class QoderProvider: LLMProvider, TraeWireProvider {
         request.setValue(site.userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue(site.ideVersion, forHTTPHeaderField: "x-ide-version")
         request.setValue(site.ideVersionCode, forHTTPHeaderField: "x-ide-version-code")
-        if let uid = QoderOAuthManager.shared.userID(instanceId: instanceId) {
+        if let uid = await QoderOAuthManager.shared.userID(instanceId: instanceId) {
             request.setValue(uid, forHTTPHeaderField: "X-Uid")
         }
         // Qoder 必需：设备指纹，否则拒答 ("missing account machine id")。
-        if let mid = QoderOAuthManager.shared.machineID(instanceId: instanceId) {
+        if let mid = await QoderOAuthManager.shared.machineID(instanceId: instanceId) {
             request.setValue(mid, forHTTPHeaderField: "X-Machine-Id")
             request.setValue(mid, forHTTPHeaderField: "machineId")
         }
