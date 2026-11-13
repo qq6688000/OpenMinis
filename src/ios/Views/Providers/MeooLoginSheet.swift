@@ -103,7 +103,16 @@ struct MeooLoginSheet: View {
               const r = await fetch('/api/v1/agent/models', { credentials: 'include' });
               if (!r.ok) return { ok:false, status:r.status };
               const j = await r.json();
-              return { ok:true, models:(j.models||[]).map(m=>({ id:m.value||m.id, name:m.key||m.display_name||m.value||m.id })) };
+              const models = ((j.data && j.data.models) || j.models || [])
+                .map(m => ({ id: m.value || m.id, name: m.key || m.display_name || m.value || m.id }));
+              const e = await fetch('/api/v1/project/ensure', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: 'Minis Chat' })
+              });
+              if (!e.ok) return { ok: false, status: e.status, loggedIn: false };
+              return { ok: true, loggedIn: true, models: models };
             } catch(e) { return { ok:false, error:String(e) }; }
             """,
             arguments: [:],
@@ -126,6 +135,14 @@ struct MeooLoginSheet: View {
             }
             let models = (obj["models"] as? [[String: Any]]) ?? []
             modelCount = models.count
+            // /api/v1/agent/models 是公开端点（无 Cookie 也返回 200），不能作为
+            // 登录证据；只有必须登录的 /api/v1/project/ensure 通过才算真登录。
+            if obj["loggedIn"] as? Bool != true {
+                let code = (obj["status"] as? Int) ?? 0
+                statusMessage = AppLocalized("未检测到登录态，请在页面内登录 Meoo")
+                phase = .failed("未检测到登录态（HTTP \(code)），请在页面内登录 Meoo")
+                return
+            }
 
             // 2) 读 Cookie（HTTP-only 也在 WKWebsiteDataStore 里）。
             wk.configuration.websiteDataStore.httpCookieStore.getAllCookies { cookies in
