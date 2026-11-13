@@ -218,7 +218,7 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
         switch providerType {
         case .openAI, .openAIResponses, .openRouter, .xAI, .kimiCode, .githubCopilot:
             return OpenCodeChannel.looksLikeOpenCodeBaseURL(effectiveCustomBaseURL)
-        case .anthropic, .gemini, .antigravity, .workBuddy, .trae, .traeIntl, .raccoon, .unsupported:
+        case .anthropic, .gemini, .antigravity, .workBuddy, .trae, .traeIntl, .raccoon, .zai, .unsupported:
             return false
         }
     }
@@ -398,6 +398,10 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
         case .raccoon:
             return ProviderKeychainHelper.loadOAuthToken(
                 instanceId: id, as: RaccoonTokenStorage.self, caller: "hasAnyCredential"
+            )?.accessToken.isEmpty == false
+        case .zai:
+            return ProviderKeychainHelper.loadOAuthToken(
+                instanceId: id, as: ZaiTokenStorage.self, caller: "hasAnyCredential"
             )?.accessToken.isEmpty == false
         case .antigravity, .openRouter, .unsupported:
             // unsupported = synced from a newer build; no usable credential here.

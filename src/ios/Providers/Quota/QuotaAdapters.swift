@@ -27,7 +27,7 @@ import Foundation
 struct QuotaInstanceDescriptor: Sendable, Equatable {
     enum ProviderKind: String, Sendable {
         case openAI, anthropic, gemini, antigravity, openRouter, openAIResponses
-        case xAI, kimiCode, githubCopilot, workBuddy, trae, traeIntl, raccoon, unsupported
+        case xAI, kimiCode, githubCopilot, workBuddy, trae, traeIntl, raccoon, zai, unsupported
     }
 
     var instanceId: String

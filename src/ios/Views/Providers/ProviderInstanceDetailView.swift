@@ -1285,6 +1285,7 @@ struct ProviderInstanceDetailView: View {
             case .workBuddy: break // browser flow runs in WorkBuddyLoginSheet
             case .trae, .traeIntl: break // browser flow runs in TraeLoginSheet
             case .raccoon: break // browser flow runs in RaccoonLoginSheet
+            case .zai: break // CLI device-code flow runs in ZaiLoginSheet
             case .unsupported: break
             }
             // [T-provider-oauth-model-discovery] Reconcile models on a
