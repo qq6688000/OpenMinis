@@ -109,13 +109,17 @@ struct MeooLoginSheet: View {
             arguments: [:],
             in: nil,
             in: .page
-        ) { result, error in
-            if let error {
+        ) { result in
+            let value: Any?
+            switch result {
+            case .failure(let error):
                 statusMessage = AppLocalized("拉取模型失败：\(error.localizedDescription)")
                 phase = .failed("模型列表拉取失败：\(error.localizedDescription)")
                 return
+            case .success(let v):
+                value = v
             }
-            guard let obj = result as? [String: Any] else {
+            guard let obj = value as? [String: Any] else {
                 statusMessage = AppLocalized("模型列表解析失败")
                 phase = .failed("模型列表解析失败")
                 return
