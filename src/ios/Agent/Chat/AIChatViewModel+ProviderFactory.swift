@@ -149,6 +149,9 @@ extension AIChatViewModel {
         case .zai:
             return OpenAIAgentProvider(
                 provider: LLMProviderFactory.makeZaiProvider(instance: instance, model: entry.model))
+        case .qoder:
+            return TraeAgentProvider(
+                provider: LLMProviderFactory.makeQoderProvider(instance: instance, model: entry.model))
         case .unsupported:
             logger.error("\(instance.providerType) has no agent provider; returning placeholder")
             return AnthropicAgentProvider(provider: AnthropicProvider(apiKey: "", model: entry.model))

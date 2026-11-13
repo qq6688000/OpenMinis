@@ -19,6 +19,8 @@ struct ProviderInstanceDetailView: View {
     @State private var showRaccoonLogin = false
     /// [T-zai] CLI device-code sign-in sheet for Z.ai (GLM Coding Plan).
     @State private var showZaiLogin = false
+    /// [T-qoder] Browser sign-in sheet for Qoder CN.
+    @State private var showQoderLogin = false
     @State private var keyInputText = ""
     @State private var isFetchingModels = false
     /// [T-thinking-rules-ui-fix] Owned HERE, not inside ThinkingRulesSection: a .sheet on a
@@ -156,6 +158,16 @@ struct ProviderInstanceDetailView: View {
         .sheet(isPresented: $showZaiLogin) {
             if let instance = instance {
                 ZaiLoginSheet(instanceId: instance.id, initialSite: instance.zaiSite ?? .china) { success in
+                    oauthRefreshTrigger.toggle()
+                    if success {
+                        Task { await store.refreshModels(for: instance) }
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showQoderLogin) {
+            if let instance = instance {
+                QoderLoginSheet(instanceId: instance.id, initialSite: instance.qoderSite ?? .china) { success in
                     oauthRefreshTrigger.toggle()
                     if success {
                         Task { await store.refreshModels(for: instance) }
@@ -686,6 +698,8 @@ struct ProviderInstanceDetailView: View {
             showRaccoonLogin = true
         } else if instance.providerType == .zai {
             showZaiLogin = true
+        } else if instance.providerType == .qoder {
+            showQoderLogin = true
         } else {
             Task {
                 await oauthLogin(instance)
@@ -713,6 +727,7 @@ struct ProviderInstanceDetailView: View {
         case .trae, .traeIntl: return (instance.traeSite ?? .china).remoteBase
         case .raccoon: return (instance.raccoonSite ?? .work).chatBaseURL
         case .zai: return (instance.zaiSite ?? .china).chatBaseURL
+        case .qoder: return (instance.qoderSite ?? .china).gatewayBase
         case .unsupported: return "—"
         }
     }
@@ -1156,7 +1171,10 @@ struct ProviderInstanceDetailView: View {
         case .workBuddy: return WorkBuddyOAuthManager.shared.isAuthenticated(instanceId: instance.id)
         case .trae, .traeIntl: return TraeOAuthManager.shared.isAuthenticated(instanceId: instance.id)
         case .raccoon: return RaccoonOAuthManager.shared.isAuthenticated(instanceId: instance.id)
-        case .zai: return ZaiOAuthManager.shared.isAuthenticated(instanceId: instance.id)
+        case .zai:
+            return ZaiOAuthManager.shared.isAuthenticated(instanceId: instance.id)
+                || ProviderKeychainHelper.loadOAuthString(instanceId: instance.id, account: "manual-oauth-token") != nil
+        case .qoder: return QoderOAuthManager.shared.isAuthenticated(instanceId: instance.id)
         case .unsupported: return false // synced from newer build
         }
     }
@@ -1245,6 +1263,12 @@ struct ProviderInstanceDetailView: View {
                 return name.map { "\($0) · \(AppLocalized("Authenticated"))" } ?? AppLocalized("Authenticated")
             }
             return AppLocalized("Not authenticated")
+        case .qoder:
+            let name = QoderOAuthManager.shared.accountName(instanceId: instance.id)
+            if QoderOAuthManager.shared.isAuthenticated(instanceId: instance.id) {
+                return name.map { "\($0) · \(AppLocalized("Authenticated"))" } ?? AppLocalized("Authenticated")
+            }
+            return AppLocalized("Not authenticated")
         case .unsupported:
             return AppLocalized("Unsupported in this app version")
         }
@@ -1266,6 +1290,7 @@ struct ProviderInstanceDetailView: View {
         case .traeIntl: return AppLocalized("Sign in with Trae")
         case .raccoon: return AppLocalized("Sign in with Raccoon")
         case .zai: return AppLocalized("Sign in with Z.ai")
+        case .qoder: return AppLocalized("Sign in with Qoder")
         case .unsupported: return AppLocalized("Sign In")
         }
     }
@@ -1286,6 +1311,7 @@ struct ProviderInstanceDetailView: View {
             case .trae, .traeIntl: break // browser flow runs in TraeLoginSheet
             case .raccoon: break // browser flow runs in RaccoonLoginSheet
             case .zai: break // CLI device-code flow runs in ZaiLoginSheet
+            case .qoder: break // PKCE loopback flow runs in QoderLoginSheet
             case .unsupported: break
             }
             // [T-provider-oauth-model-discovery] Reconcile models on a
@@ -1338,6 +1364,7 @@ struct ProviderInstanceDetailView: View {
         case .trae, .traeIntl: TraeOAuthManager.shared.logout(instanceId: instance.id)
         case .raccoon: RaccoonOAuthManager.shared.logout(instanceId: instance.id)
         case .zai: ZaiOAuthManager.shared.logout(instanceId: instance.id)
+        case .qoder: QoderOAuthManager.shared.logout(instanceId: instance.id)
         case .unsupported: break
         }
     }
@@ -1371,6 +1398,8 @@ struct ProviderInstanceDetailView: View {
             token = try? await RaccoonOAuthManager.shared.validAccessToken(instanceId: instance.id)
         case .zai:
             token = try? await ZaiOAuthManager.shared.validAccessToken(instanceId: instance.id)
+        case .qoder:
+            token = try? await QoderOAuthManager.shared.validAccessToken(instanceId: instance.id)
         case .unsupported:
             token = nil
         }
@@ -1391,7 +1420,8 @@ struct ProviderInstanceDetailView: View {
         case .workBuddy: return "" // OAuth only
         case .trae, .traeIntl: return "" // OAuth only
         case .raccoon: return "" // OAuth only
-        case .zai: return "" // OAuth only
+        case .zai: return "智谱 API Key（open.bigmodel.cn）"
+        case .qoder: return ""
         case .antigravity: return "API Key..."
         case .openRouter: return "sk-or-..."
         case .openAIResponses: return "sk-..."

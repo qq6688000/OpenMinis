@@ -1393,6 +1393,8 @@ final class ProviderConfigStore: ObservableObject {
                 return ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: TraeTokenStorage.self).flatMap { try? JSONEncoder().encode($0) }
             case .raccoon:
                 return ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: RaccoonTokenStorage.self).flatMap { try? JSONEncoder().encode($0) }
+            case .qoder:
+                return ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: QoderTokenStorage.self).flatMap { try? JSONEncoder().encode($0) }
             default:
                 return nil
             }
@@ -1538,6 +1540,10 @@ final class ProviderConfigStore: ObservableObject {
                 }
             case .raccoon:
                 if let t = try? JSONDecoder().decode(RaccoonTokenStorage.self, from: blob) {
+                    ProviderKeychainHelper.saveOAuthToken(t, instanceId: instance.id)
+                }
+            case .qoder:
+                if let t = try? JSONDecoder().decode(QoderTokenStorage.self, from: blob) {
                     ProviderKeychainHelper.saveOAuthToken(t, instanceId: instance.id)
                 }
             default:
@@ -3332,8 +3338,14 @@ final class ProviderConfigStore: ObservableObject {
         case (.zai, _):
             // [T-zai] Z.ai 没有已知可用的 /models 发现端点（无 zai-models.json），
             // 先校验 token 有效性，模型列表直接走内置 GLM 系列占位。
-            _ = try await ZaiOAuthManager.shared.validAccessToken(instanceId: instance.id)
+            if ProviderKeychainHelper.loadOAuthString(instanceId: instance.id, account: "manual-oauth-token") == nil {
+                _ = try await ZaiOAuthManager.shared.validAccessToken(instanceId: instance.id)
+            }
             return ZaiModelsAPI.allModels
+        case (.qoder, _):
+            // [T-qoder] 目录来自内置 qoder-models.json；先校验 token 有效性。
+            _ = try await QoderOAuthManager.shared.validAccessToken(instanceId: instance.id)
+            return QoderModelsAPI.allModels
         case (.unsupported, _):
             // Synced from a newer build — can't fetch; keep whatever's stored.
             return []
@@ -3524,6 +3536,7 @@ final class ProviderConfigStore: ObservableObject {
         case .trae, .traeIntl: return (instance.traeSite ?? .china).remoteBase
         case .raccoon: return (instance.raccoonSite ?? .work).apiBase
         case .zai: return (instance.zaiSite ?? .china).chatBaseURL
+        case .qoder: return (instance.qoderSite ?? .china).gatewayBase
         case .unsupported: return nil // synced from newer build
         }
     }

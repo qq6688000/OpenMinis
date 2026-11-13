@@ -86,6 +86,8 @@ enum LLMProviderFactory {
             return openCode(makeRaccoonProvider(instance: instance, model: entry.model))
         case .zai:
             return openCode(makeZaiProvider(instance: instance, model: entry.model))
+        case .qoder:
+            return makeQoderProvider(instance: instance, model: entry.model)
         case .unsupported:
             throw FactoryError.voiceOnlyProvider
         }
@@ -554,6 +556,11 @@ enum LLMProviderFactory {
         provider.extraHeaders["User-Agent"] = ZaiOAuthManager.userAgent
         provider.extraHeaders["zcodeAppVersion"] = ZaiOAuthManager.appVersion
         return provider
+    }
+
+    /// Qoder：与 Trae 同源的 `llm_utils_chat` SSE 端点，需自定义 `QoderProvider`。
+    static func makeQoderProvider(instance: ProviderInstance, model: LLMModel) -> QoderProvider {
+        QoderProvider(model: model, site: instance.qoderSite ?? .china, instanceId: instance.id)
     }
 
     /// Trae：官方 `llm_utils_chat` SSE 端点，非 OpenAI 格式，需自定义

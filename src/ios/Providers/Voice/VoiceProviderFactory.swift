@@ -63,7 +63,7 @@ enum VoiceProviderFactory {
             return true
         case .anthropic:
             return normalizedBase.contains("minimax")
-        case .antigravity, .kimiCode, .githubCopilot, .workBuddy, .trae, .traeIntl, .raccoon, .zai, .unsupported:
+        case .antigravity, .kimiCode, .githubCopilot, .workBuddy, .trae, .traeIntl, .raccoon, .zai, .qoder, .unsupported:
             return false
         }
     }
@@ -180,7 +180,7 @@ enum VoiceProviderFactory {
         // from a newer build this version can't service.
         // [T-copilot-provider] Copilot serves chat only — there is no speech
         // endpoint under api.githubcopilot.com to route to.
-        case .antigravity, .kimiCode, .githubCopilot, .workBuddy, .trae, .traeIntl, .raccoon, .zai, .unsupported:
+        case .antigravity, .kimiCode, .githubCopilot, .workBuddy, .trae, .traeIntl, .raccoon, .zai, .qoder, .unsupported:
             return nil
         }
     }

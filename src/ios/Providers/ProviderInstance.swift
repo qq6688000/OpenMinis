@@ -59,6 +59,7 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
     /// [T-zai] Z.ai 站点（当前仅 china 国内版）。仅 `.zai` 实例使用；
     /// nil 时回退到 china。
     var zaiSite: ZaiSite?
+    var qoderSite: QoderSite?
 
     init(
         id: String = UUID().uuidString,
@@ -77,7 +78,8 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
         workBuddySite: WorkBuddySite? = nil,
         traeSite: TraeSite? = nil,
         raccoonSite: RaccoonSite? = nil,
-        zaiSite: ZaiSite? = nil
+        zaiSite: ZaiSite? = nil,
+        qoderSite: QoderSite? = nil
     ) {
         self.id = id
         self.label = label
@@ -96,6 +98,7 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
         self.traeSite = traeSite
         self.raccoonSite = raccoonSite
         self.zaiSite = zaiSite
+        self.qoderSite = qoderSite
     }
 
     // MARK: - Codable (manual, for backwards compatibility)
@@ -103,7 +106,7 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
     enum CodingKeys: String, CodingKey {
         case id, label, providerType, credentialType, isEnabled, createdAt, customBaseURL, appendV1Suffix
         case imageEndpointMode, imageEndpointResolved, customUserAgent, azureMode, workBuddySite
-        case traeSite, raccoonSite, zaiSite
+        case traeSite, raccoonSite, zaiSite, qoderSite
     }
 
     init(from decoder: Decoder) throws {
@@ -134,6 +137,7 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
         traeSite = (try? c.decodeIfPresent(TraeSite.self, forKey: .traeSite))
         raccoonSite = (try? c.decodeIfPresent(RaccoonSite.self, forKey: .raccoonSite))
         zaiSite = (try? c.decodeIfPresent(ZaiSite.self, forKey: .zaiSite))
+        qoderSite = (try? c.decodeIfPresent(QoderSite.self, forKey: .qoderSite))
     }
 
     func encode(to encoder: Encoder) throws {
@@ -160,6 +164,7 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
         if let traeSite { try c.encode(traeSite, forKey: .traeSite) }
         if let raccoonSite { try c.encode(raccoonSite, forKey: .raccoonSite) }
         if let zaiSite { try c.encode(zaiSite, forKey: .zaiSite) }
+        if let qoderSite { try c.encode(qoderSite, forKey: .qoderSite) }
     }
 
     /// Returns customUserAgent if non-nil and non-empty (trimmed), otherwise nil.
@@ -181,7 +186,7 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
         // [T-copilot-provider] Copilot's User-Agent is part of the protocol —
         // the API rejects requests that do not look like the editor plugin — so
         // it must not be user-overridable the way a proxy's UA is.
-        case .gemini, .antigravity, .githubCopilot, .workBuddy, .trae, .traeIntl, .raccoon, .zai, .unsupported:
+        case .gemini, .antigravity, .githubCopilot, .workBuddy, .trae, .traeIntl, .raccoon, .zai, .qoder, .unsupported:
             return false
         }
     }
@@ -218,7 +223,7 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
         switch providerType {
         case .openAI, .openAIResponses, .openRouter, .xAI, .kimiCode, .githubCopilot:
             return OpenCodeChannel.looksLikeOpenCodeBaseURL(effectiveCustomBaseURL)
-        case .anthropic, .gemini, .antigravity, .workBuddy, .trae, .traeIntl, .raccoon, .zai, .unsupported:
+        case .anthropic, .gemini, .antigravity, .workBuddy, .trae, .traeIntl, .raccoon, .zai, .qoder, .unsupported:
             return false
         }
     }
@@ -402,6 +407,10 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
         case .zai:
             return ProviderKeychainHelper.loadOAuthToken(
                 instanceId: id, as: ZaiTokenStorage.self, caller: "hasAnyCredential"
+            )?.accessToken.isEmpty == false
+        case .qoder:
+            return ProviderKeychainHelper.loadOAuthToken(
+                instanceId: id, as: QoderTokenStorage.self, caller: "hasAnyCredential"
             )?.accessToken.isEmpty == false
         case .antigravity, .openRouter, .unsupported:
             // unsupported = synced from a newer build; no usable credential here.

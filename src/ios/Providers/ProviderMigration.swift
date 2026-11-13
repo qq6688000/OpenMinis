@@ -103,6 +103,9 @@ enum ProviderMigration {
             case .zai:
                 // [T-zai] New provider; no legacy singleton tokens to migrate.
                 break
+            case .qoder:
+                // [T-qoder] New provider; no legacy singleton tokens to migrate.
+                break
             case .unsupported:
                 break
             }

@@ -857,6 +857,10 @@ struct LLMModel: Equatable, Hashable, Identifiable, Sendable, Codable {
         ),
         "Zai": ModelCapabilities(
             supportedModalities: ProviderType.zai.defaultModality,
+            supportedAuth: [.oauth, .apiKey]
+        ),
+        "Qoder": ModelCapabilities(
+            supportedModalities: ProviderType.qoder.defaultModality,
             supportedAuth: [.oauth]
         ),
     ]

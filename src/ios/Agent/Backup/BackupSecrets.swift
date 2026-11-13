@@ -207,6 +207,9 @@ enum BackupSecretsCollector {
         case .zai:
             return ProviderKeychainHelper.loadOAuthToken(instanceId: id, as: ZaiTokenStorage.self)
                 .flatMap { try? JSONEncoder().encode($0) }
+        case .qoder:
+            return ProviderKeychainHelper.loadOAuthToken(instanceId: id, as: QoderTokenStorage.self)
+                .flatMap { try? JSONEncoder().encode($0) }
         case .antigravity, .openAIResponses, .openRouter, .unsupported:
             return nil
         }

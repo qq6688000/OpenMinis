@@ -576,6 +576,9 @@
 		ETRAE0009 /* TraeOAuthLogin.swift in Sources */ = {isa = PBXBuildFile; fileRef = ETRAE000A /* TraeOAuthLogin.swift */; };
 		ETRAE000D /* TraeToolSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = ETRAE000E /* TraeToolSupport.swift */; };
 		ETRAE000B /* TraeLoginSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = ETRAE000C /* TraeLoginSheet.swift */; };
+		EQDR0001 /* QoderProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = EQDR0002 /* QoderProvider.swift */; };
+		EQDR0003 /* QoderOAuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = EQDR0004 /* QoderOAuthManager.swift */; };
+		EQDR0005 /* QoderLoginSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = EQDR0006 /* QoderLoginSheet.swift */; };
 		E6A000002 /* AntigravityModelsAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6A000012 /* AntigravityModelsAPI.swift */; };
 		E6A000003 /* AntigravityOAuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6A000013 /* AntigravityOAuthManager.swift */; };
 		E6A000004 /* AntigravityAgentProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6A000014 /* AntigravityAgentProvider.swift */; };
@@ -1402,6 +1405,9 @@
 		ETRAE000A /* TraeOAuthLogin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TraeOAuthLogin.swift; path = Providers/Trae/TraeOAuthLogin.swift; sourceTree = SOURCE_ROOT; };
 		ETRAE000E /* TraeToolSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TraeToolSupport.swift; path = Providers/Trae/TraeToolSupport.swift; sourceTree = SOURCE_ROOT; };
 		ETRAE000C /* TraeLoginSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TraeLoginSheet.swift; path = Views/Providers/TraeLoginSheet.swift; sourceTree = SOURCE_ROOT; };
+		EQDR0002 /* QoderProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = QoderProvider.swift; path = Providers/Qoder/QoderProvider.swift; sourceTree = SOURCE_ROOT; };
+		EQDR0004 /* QoderOAuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = QoderOAuthManager.swift; path = Providers/Qoder/QoderOAuthManager.swift; sourceTree = SOURCE_ROOT; };
+		EQDR0006 /* QoderLoginSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = QoderLoginSheet.swift; path = Views/Providers/QoderLoginSheet.swift; sourceTree = SOURCE_ROOT; };
 		E6A000012 /* AntigravityModelsAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AntigravityModelsAPI.swift; sourceTree = "<group>"; };
 		E6A000013 /* AntigravityOAuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AntigravityOAuthManager.swift; sourceTree = "<group>"; };
 		E6A000014 /* AntigravityAgentProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AntigravityAgentProvider.swift; sourceTree = "<group>"; };
@@ -1813,6 +1819,9 @@
 				ETRAE000A /* TraeOAuthLogin.swift */,
 				ETRAE000E /* TraeToolSupport.swift */,
 				ETRAE000C /* TraeLoginSheet.swift */,
+				EQDR0002 /* QoderProvider.swift */,
+				EQDR0004 /* QoderOAuthManager.swift */,
+				EQDR0006 /* QoderLoginSheet.swift */,
 				ERACC0006 /* RaccoonLoginSheet.swift */,
 				E5C000030 /* OpenAI */,
 				E7A000030 /* OpenRouter */,
@@ -3437,6 +3446,9 @@
 				ETRAE0009 /* TraeOAuthLogin.swift in Sources */,
 				ETRAE000D /* TraeToolSupport.swift in Sources */,
 				ETRAE000B /* TraeLoginSheet.swift in Sources */,
+				EQDR0001 /* QoderProvider.swift in Sources */,
+				EQDR0003 /* QoderOAuthManager.swift in Sources */,
+				EQDR0005 /* QoderLoginSheet.swift in Sources */,
 				E6A000002 /* AntigravityModelsAPI.swift in Sources */,
 				E6A000003 /* AntigravityOAuthManager.swift in Sources */,
 				E6A000004 /* AntigravityAgentProvider.swift in Sources */,

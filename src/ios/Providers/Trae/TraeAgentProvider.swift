@@ -9,9 +9,22 @@ private let logger = AppLogger(category: "TraeAgent")
 /// OpenAI Chat Completions. TraeProvider speaks it and emits `LLMStreamChunk`;
 /// this adapter carries tool definitions up and maps returned `tool_calls`
 /// into the agent loop's `AgentStreamEvent`.
+/// Minimal surface shared by TraeProvider and QoderProvider (same wire dialect).
+protocol TraeWireProvider: AnyObject {
+    var name: String { get }
+    var model: LLMModel { get }
+    func streamChat(
+        messages: [[String: Any]],
+        systemPrompt: String?,
+        toolSchemas: [[String: Any]]?
+    ) async throws -> AsyncThrowingStream<TraeProvider.ChatEvent, Error>
+}
+
+extension TraeProvider: TraeWireProvider {}
+
 final class TraeAgentProvider: AgentProvider {
 
-    let provider: TraeProvider
+    let provider: TraeWireProvider
 
     var name: String { provider.name }
     var model: LLMModel { provider.model }
@@ -22,7 +35,7 @@ final class TraeAgentProvider: AgentProvider {
     /// more idle time so a slow-but-alive stream isn't cut off.
     var responseIdleTimeout: TimeInterval { 240 }
 
-    init(provider: TraeProvider) {
+    init(provider: TraeWireProvider) {
         self.provider = provider
     }
 

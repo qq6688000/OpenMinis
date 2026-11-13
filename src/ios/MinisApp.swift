@@ -656,6 +656,7 @@ struct MinisApp: App {
                         case .trae, .traeIntl: hasOAuthTok = ProviderKeychainHelper.loadOAuthToken(instanceId: inst.id, as: TraeTokenStorage.self) != nil
                         case .raccoon: hasOAuthTok = ProviderKeychainHelper.loadOAuthToken(instanceId: inst.id, as: RaccoonTokenStorage.self) != nil
                         case .zai: hasOAuthTok = ProviderKeychainHelper.loadOAuthToken(instanceId: inst.id, as: ZaiTokenStorage.self) != nil
+                        case .qoder: hasOAuthTok = ProviderKeychainHelper.loadOAuthToken(instanceId: inst.id, as: QoderTokenStorage.self) != nil
                         default: hasOAuthTok = false
                         }
                         let hasManual = ProviderKeychainHelper.loadOAuthString(instanceId: inst.id, account: "manual-oauth-token") != nil

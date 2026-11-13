@@ -48,6 +48,11 @@ enum ProviderType: String, Codable, CaseIterable, Hashable, Sendable {
     /// OpenAI 兼容端点 `{chatBaseURL}/chat/completions`，Bearer + `zcodeAppVersion`。
     /// 站点由 `ProviderInstance.zaiSite` 指定（仅 china 国内版）。
     case zai
+    /// Qoder（阿里巴巴 Qoder IDE，Trae 孪生）。与 Trae 共用 OAuth 基类逻辑
+    /// （PKCE loopback + ExchangeToken），聊天同为 `llm_utils_chat` SSE 端点，
+    /// 但 host / clientID / app_id 不同。站点由 `ProviderInstance.qoderSite`
+    /// 指定（仅 china 国内版）。
+    case qoder
     /// Sentinel for a provider type this app build doesn't recognize — e.g. a
     /// NEWER build synced an instance whose `provider_type` string isn't a known
     /// case here. We DECODE to this instead of throwing/dropping, so the instance
@@ -78,6 +83,7 @@ enum ProviderType: String, Codable, CaseIterable, Hashable, Sendable {
         case .traeIntl: return "Trae (Intl)"
         case .raccoon: return "Raccoon"
         case .zai: return "Z.ai"
+        case .qoder: return "Qoder"
         case .unsupported: return "Unsupported"
         }
     }
@@ -119,6 +125,9 @@ enum ProviderType: String, Codable, CaseIterable, Hashable, Sendable {
             // Z.ai 目录先用内置 GLM 系列占位（无 zai-models.json）；登录后
             // 若 `/models` 可用可开启，目前回退内置。
             return false
+        case .qoder:
+            // Qoder 目录来自内置 qoder-models.json（19 个模型）。
+            return false
         case .openAI:
             // OpenAIModelsAPI.fetchModelsOAuth() is a compiled-in list.
             return false
@@ -147,6 +156,7 @@ enum ProviderType: String, Codable, CaseIterable, Hashable, Sendable {
         case .trae, .traeIntl: return TraeModelsAPI.allModels
         case .raccoon: return RaccoonModelsAPI.allModels
         case .zai: return ZaiModelsAPI.allModels
+        case .qoder: return QoderModelsAPI.allModels
         // Deliberately empty: the task requires the list come from the server
         // (`model_picker_enabled`), never a compiled-in guess that would go
         // stale and offer models the account cannot use.
@@ -185,6 +195,8 @@ enum ProviderType: String, Codable, CaseIterable, Hashable, Sendable {
             return AppLocalized("Sign in with your Raccoon account in the browser.")
         case .zai:
             return AppLocalized("Sign in with your Z.ai / GLM Coding Plan account.")
+        case .qoder:
+            return AppLocalized("Sign in with your Qoder account in the browser.")
         case .antigravity:
             return AppLocalized("\(builtInModels.count) built-in models")
         case .unsupported:
@@ -208,6 +220,7 @@ enum ProviderType: String, Codable, CaseIterable, Hashable, Sendable {
         case .trae, .traeIntl: return .vision
         case .raccoon: return .vision
         case .zai: return .vision
+        case .qoder: return .vision
         case .unsupported: return .vision
         }
     }
@@ -332,11 +345,18 @@ enum ZaiSite: String, Codable, CaseIterable, Hashable, Sendable {
 
     var displayName: String { "Z.ai CN" }
 
-    /// CLI 登录流基座（`cli/init` / `cli/poll/{flowID}`）。
-    var zcodeBaseURL: String { "https://zcode.z.ai" }
+    /// 登录/开放平台基座（智谱国内站 open.bigmodel.cn）。
+    var zcodeBaseURL: String { "https://open.bigmodel.cn" }
 
-    /// 业务/GLM Coding Plan chat 基座（OpenAI 兼容）。
-    var chatBaseURL: String { "https://api.z.ai/api/coding/paas/v4" }
+    /// GLM Coding Plan chat 基座（OpenAI Chat Completions 兼容协议）。
+    /// 国内官方文档：`https://open.bigmodel.cn/api/coding/paas/v4`。
+    var chatBaseURL: String { "https://open.bigmodel.cn/api/coding/paas/v4" }
+
+    /// Anthropic Message 兼容协议基座（GLM-5.3 系列推荐，Claude Code 同款）。
+    var anthropicBaseURL: String { "https://open.bigmodel.cn/api/anthropic" }
+
+    /// OpenAI Responses 协议基座。
+    var responsesBaseURL: String { "https://open.bigmodel.cn/api/v1" }
 
     /// CLI init 的 `provider` 字段（"zai" 国内版 / "bigmodel" 暂不用）。
     var initProvider: String { "zai" }
@@ -345,6 +365,47 @@ enum ZaiSite: String, Codable, CaseIterable, Hashable, Sendable {
 
     static func fromRaw(_ raw: String?) -> ZaiSite {
         raw.flatMap(ZaiSite.init(rawValue:)) ?? .china
+    }
+}
+
+/// [T-qoder] Qoder（阿里巴巴 Qoder IDE，Trae 孪生）站点。当前仅国内版 `china`。
+///
+/// 登录与 Trae 共用同一 `OAuthLogin` 基类（PKCE loopback + ExchangeToken），
+/// 但 host / clientID / app_id 不同；chat 端点为专用 SSE
+/// `/api/agent/v3/llm_utils_chat`（与 Trae 同路径），需 `machineId` 头。
+enum QoderSite: String, Codable, CaseIterable, Hashable, Sendable {
+    case china = "china"
+
+    var displayName: String { "Qoder CN" }
+
+    /// 网关 origin（chat / agent 端点挂在其下）。
+    var gatewayBase: String { "https://gateway.qoder.com.cn" }
+
+    /// 对外 API 基座（模型目录 `algo/api/v2/model/list`）。
+    var openAPIBase: String { "https://openapi.qoder.com.cn" }
+
+    /// 登录授权页 web 基座。
+    var webBase: String { "https://qoder.cn" }
+
+    /// ExchangeToken 的 host。
+    var oauthHost: String { "https://gateway.qoder.com.cn" }
+
+    /// OAuth clientID（QoderSite 显式带 client，与 Trae 的 ono9krqynydwx5 不同）。
+    /// 【待实测】若 4001/401，优先核对此处。
+    var clientID: String { "qoder-vscode" }
+
+    /// agent chat 的 `app_id`。【待实测】Qoder 若拒答可核对。
+    var appID: String { "6eefa01c-1036-4c7e-9ca5-d891f63bfcd8" }
+
+    /// IDE 版本（与 Trae 同套版本号，Qoder 是 Trae 同源分发）。
+    var ideVersion: String { "0.1.61" }
+    var ideVersionCode: String { "20260820" }
+    var userAgent: String { "Qoder/0.1.61" }
+
+    var host: String { URL(string: gatewayBase)?.host ?? "" }
+
+    static func fromRaw(_ raw: String?) -> QoderSite {
+        raw.flatMap(QoderSite.init(rawValue:)) ?? .china
     }
 }
 
@@ -453,6 +514,48 @@ enum ZaiModelsAPI {
         LLMModel(id: "glm-5.3-flash", displayName: "GLM 5.3 Flash", provider: "Zai"),
         LLMModel(id: "minimax-m3", displayName: "MiniMax M3", provider: "Zai"),
     ]
+}
+
+/// [T-qoder] Qoder 内置模型目录（来自 kwwk 的 qoder-models.json，19 个模型，
+/// api=qoder-chat，contextWindow 1_000_000，maxTokens 32_000）。
+enum QoderModelsAPI {
+    static let defaultModelId = "ultimate"
+
+    static let allModels: [LLMModel] = [
+        LLMModel(id: "ultimate", displayName: "Ultimate", provider: "Qoder"),
+        LLMModel(id: "performance", displayName: "Performance", provider: "Qoder"),
+        LLMModel(id: "efficient", displayName: "Efficient", provider: "Qoder"),
+        LLMModel(id: "fast", displayName: "Fast", provider: "Qoder"),
+        LLMModel(id: "smodel", displayName: "Sonus", provider: "Qoder"),
+        LLMModel(id: "cmodel", displayName: "Cantus", provider: "Qoder"),
+        LLMModel(id: "gmodel", displayName: "GLM-5.3", provider: "Qoder"),
+        LLMModel(id: "gfmodel", displayName: "GLM-5.3-Flash", provider: "Qoder"),
+        LLMModel(id: "gm51model", displayName: "GLM-5.2", provider: "Qoder"),
+        LLMModel(id: "kmodel", displayName: "Kimi-K2.8-Preview", provider: "Qoder"),
+        LLMModel(id: "kmodel_latest", displayName: "Kimi-K3", provider: "Qoder"),
+        LLMModel(id: "mmodel", displayName: "MiniMax-M3", provider: "Qoder"),
+        LLMModel(id: "dmodel", displayName: "DeepSeek-V4-Pro", provider: "Qoder"),
+        LLMModel(id: "dfmodel", displayName: "DeepSeek-Flash", provider: "Qoder"),
+        LLMModel(id: "qmodel", displayName: "Qwen3.7-Plus", provider: "Qoder"),
+        LLMModel(id: "qmodel_latest", displayName: "Qwen3.7-Max", provider: "Qoder"),
+        LLMModel(id: "qmodel_38max", displayName: "Qwen3.8-Max", provider: "Qoder"),
+        LLMModel(id: "qfmodel", displayName: "Qwen3.8-Flash", provider: "Qoder"),
+        LLMModel(id: "q37fmodel", displayName: "Qwen3.7-Flash", provider: "Qoder"),
+    ]
+}
+
+/// [T-qoder] Qoder 账号凭据，按实例存 Keychain（含 machineId 设备指纹）。
+struct QoderTokenStorage: Codable, Equatable {
+    var accessToken: String
+    var refreshToken: String
+    var expireDate: Date?
+    var userID: String
+    var machineID: String
+    var deviceID: String
+    var oauthHost: String?
+    var accountName: String
+    var site: String
+    var lastRefresh: Date
 }
 
 /// [T-zai] Z.ai 账号凭据，按实例存 Keychain。

@@ -182,6 +182,7 @@ struct AddProviderView: View {
     @State private var showTraeLogin = false
     @State private var showRaccoonLogin = false
     @State private var showZaiLogin = false
+    @State private var showQoderLogin = false
     @State private var selectedTraeSite: TraeSite = .china
     @State private var oauthAuthTime: Date?
     @State private var showDataSharingConsent = false
@@ -390,6 +391,15 @@ struct AddProviderView: View {
                 if success {
                     oauthAuthTime = Date()
                     oauthMaskedToken = loadMaskedToken(type: .zai)
+                    pendingOAuthDone = true
+                }
+            }
+        }
+        .sheet(isPresented: $showQoderLogin) {
+            QoderLoginSheet(instanceId: pendingInstanceId, initialSite: .china) { success in
+                if success {
+                    oauthAuthTime = Date()
+                    oauthMaskedToken = loadMaskedToken(type: .qoder)
                     pendingOAuthDone = true
                 }
             }
@@ -1131,6 +1141,10 @@ struct AddProviderView: View {
             case .zai:
                 showZaiLogin = true
                 return
+            // [T-qoder] PKCE loopback flow runs in QoderLoginSheet.
+            case .qoder:
+                showQoderLogin = true
+                return
             case .unsupported: break // free / unsupported — no OAuth
             }
             oauthAuthTime = Date()
@@ -1174,6 +1188,8 @@ struct AddProviderView: View {
             token = ProviderKeychainHelper.loadOAuthToken(instanceId: pendingInstanceId, as: RaccoonTokenStorage.self)?.accessToken
         case .zai:
             token = ProviderKeychainHelper.loadOAuthToken(instanceId: pendingInstanceId, as: ZaiTokenStorage.self)?.accessToken
+        case .qoder:
+            token = ProviderKeychainHelper.loadOAuthToken(instanceId: pendingInstanceId, as: QoderTokenStorage.self)?.accessToken
         case .unsupported:
             token = nil // free / unsupported — no token
         }
@@ -1259,6 +1275,7 @@ struct AddProviderView: View {
         case .traeIntl: return AppLocalized("Sign in with Trae")
         case .raccoon: return AppLocalized("Sign in with Raccoon")
         case .zai: return AppLocalized("Sign in with Z.ai")
+        case .qoder: return AppLocalized("Sign in with Qoder")
         case .unsupported: return AppLocalized("Sign In")
         }
     }
@@ -1279,6 +1296,7 @@ struct AddProviderView: View {
         case .trae, .traeIntl: return "" // OAuth only
         case .raccoon: return "" // OAuth only
         case .zai: return "" // OAuth only
+        case .qoder: return "" // OAuth only
         case .unsupported: return ""
         }
     }
@@ -1299,6 +1317,7 @@ struct AddProviderView: View {
         case .traeIntl: return "Trae (Intl)"
         case .raccoon: return "Raccoon"
         case .zai: return "Z.ai"
+        case .qoder: return "Qoder"
         case .unsupported: return AppLocalized("Unsupported")
         }
     }
@@ -1338,6 +1357,8 @@ struct AddProviderView: View {
         case .raccoon:
             return [.oauth]
         case .zai:
+            return [.apiKey, .oauth]
+        case .qoder:
             return [.oauth]
         case .openAIResponses, .gemini:
             return [.apiKey]
@@ -1384,6 +1405,8 @@ struct AddProviderView: View {
             return AppLocalized("Sign in with your Raccoon account. Raccoon login grants access to its model catalog.")
         case (.zai, _):
             return AppLocalized("Sign in with your Z.ai / GLM Coding Plan account. Z.ai login grants access to its GLM model catalog.")
+        case (.qoder, _):
+            return AppLocalized("Sign in with your Qoder account. Qoder login grants access to its model catalog.")
         case (.unsupported, _):
             return AppLocalized("This provider isn't supported in this app version.")
         }
@@ -1434,6 +1457,9 @@ struct AddProviderView: View {
         case .zai:
             Image(systemName: "brain.fill")
                 .foregroundStyle(.teal)
+        case .qoder:
+            Image(systemName: "hammer.fill")
+                .foregroundStyle(.purple)
         case .unsupported:
             Image(systemName: "questionmark.circle")
                 .foregroundStyle(.gray)
@@ -1456,6 +1482,7 @@ struct AddProviderView: View {
         case .traeIntl: return .indigo
         case .raccoon: return .pink
         case .zai: return .teal
+        case .qoder: return .purple
         case .unsupported: return .gray
         }
     }
